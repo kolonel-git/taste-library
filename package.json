@@ -1,0 +1,28 @@
+{
+  "name": "taste-library",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local visual library of UI and design inspiration",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "vite build && node src/server/index.ts",
+    "server": "node src/server/index.ts --no-open",
+    "dev:server": "node --watch src/server/index.ts --no-open",
+    "dev:ui": "vite",
+    "build": "vite build",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "preact": "^11.1.1"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
