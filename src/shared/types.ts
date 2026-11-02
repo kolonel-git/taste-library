@@ -47,6 +47,8 @@ export interface ItemView {
   durationS: number | null;
   error: string | null;
   thumbUrl: string;
+  /** Original file, streamed with range support. */
+  mediaUrl: string;
 }
 
 export interface SyncSummary {

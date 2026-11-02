@@ -7,5 +7,5 @@ export default defineConfig({
   plugins: [preact()],
   root: 'src/ui',
   build: { outDir: '../../dist', emptyOutDir: true },
-  server: { proxy: { '/api': API, '/thumb': API } },
+  server: { proxy: { '/api': API, '/thumb': API, '/media': API } },
 });

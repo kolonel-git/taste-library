@@ -43,10 +43,10 @@ if (!skipScan) {
 
 const waiting = store.countAnalysable();
 if (waiting === 0) {
-  console.log('Nothing pending. All images are analysed.');
+  console.log('Nothing pending. Everything is analysed.');
   process.exit(0);
 }
-console.log(`Analysing ${waiting} pending image${waiting === 1 ? '' : 's'} with Claude Code (${config.concurrency} at a time)…`);
+console.log(`Analysing ${waiting} pending item${waiting === 1 ? '' : 's'} with Claude Code (${config.concurrency} at a time)…`);
 
 const result = await analysePending({
   store,
@@ -54,6 +54,7 @@ const result = await analysePending({
   dataDir,
   concurrency: config.concurrency,
   model: config.model,
+  keyframes: { mode: config.keyframeMode, count: config.keyframeCount },
   log: (line) => console.log(`  ${line}`),
 });
 

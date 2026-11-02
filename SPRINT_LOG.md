@@ -121,3 +121,58 @@ Click **Analyse pending**. Or from a terminal: `npm run analyse`. Or inside Clau
 - Removing an AI tag by hand is a Sprint 5 question (user tag edits are designed to sit alongside AI tags; the schema already tracks `source`).
 
 **Needs your decision before Sprint 3:** none blocking.
+
+## Sprint 3 — Video
+
+**Goal:** videos are first-class items: analysed from keyframes, playable, previewed on hover.
+**Stories:** 8 (keyframes analysed together as one item), 9 (video cards preview on hover).
+
+### Planning
+
+| # | Task | Acceptance criteria |
+| --- | --- | --- |
+| 1 | Keyframe extraction | 6 frames by default, evenly spaced (mid-point of each sixth), via ffmpeg into `frames/<id>-<hash>/`. Optional `scene` mode picks scene changes and falls back to even spacing when the clip has fewer than 3 cuts. Frames are cached and reused on retry |
+| 2 | Cache hygiene | Frames are removed when a video changes or is deleted, same as thumbnails |
+| 3 | Video through the shared analyser | Same prompt, schema, validation and queue as images. Frames go to one `claude -p` call, with their timestamps, and come back as one item. Style guide gets an extra Motion section. Videos count in "Analyse pending" and in the terminal command |
+| 4 | Media endpoint | `GET /media/:id` streams the original with HTTP range support (seeking works), correct content types, read-only |
+| 5 | Hover preview | Video cards play a muted looping preview on hover, fall back to the thumbnail if it can't play, and stop on leave |
+| 6 | Tests | Timestamps, extraction, cache reuse and cleanup, scene fallback, range parsing, video analysis through a stubbed `claude` |
+| 7 | End-to-end | Sample mp4 analysed by the real CLI, previews on hover in the browser |
+
+### Review
+
+**Built**
+- `src/analysis/keyframes.ts`: picks keyframe times (evenly spaced by default, or scene changes), extracts them with ffmpeg into `frames/<id>-<hash>/` in the app data folder, reuses a finished set on retry, and cleans up. A missing duration or a broken file fails the item with a clear reason and leaves no half-made folder.
+- Videos go through the same prompt, schema, validation, queue and retry as images. The prompt lists every frame with its timestamp, treats them as one piece, and asks for an extra `### Motion` section in the style guide. Claude Code is only given the frames folder, so it never opens the original video.
+- "Analyse pending" and `npm run analyse` now include videos.
+- `GET /media/:id` streams the original with range support (206 / 416 handled, correct content types), read-only. It also feeds Sprint 4's full-size view.
+- Hover preview: video cards play a muted, looping preview over the thumbnail, fade in once playing, stop and unmount on leave, and quietly fall back to the thumbnail if the file can't play.
+- Frames are removed when a video changes or is deleted, same as thumbnails.
+
+**Try it**
+```bash
+npm start
+```
+Rescan, click **Analyse pending**, then hover the video card.
+
+**Test results**
+- `npm test`: 75 of 75 pass (11 new): timestamp maths, extraction and cache reuse, scene detection on a clip with real cuts, fallback to even spacing on a clip with none, failure cleanup, frame cleanup on change and delete, a video analysed through the stubbed `claude` as one call with five timed frames and the original not exposed, range parsing, prompt wording.
+- `npm run typecheck`, `npm run build`: clean.
+- Real run: `npm run analyse` on all 9 samples (8 images and the 5 s mp4), 9 analysed, 0 failed, 116 s. The video took 32 s. Result: "Peach Isometric Rental Listing", tags `web-app, real-estate, isometric-3d, warm-neutral, motion`. The description tracks what changes across the six frames (the 3D room slowly rotates and scales up while the UI chrome stays fixed), and the Motion section gives duration, easing and a suggested `cubic-bezier`.
+- Range requests checked with curl against the real file: full 200, `bytes=0-99` gives 206 with the right `content-range`, a suffix range works, an out-of-range request gives 416, an unknown id gives 404. A 100-byte slice matched the file byte for byte.
+- Browser: hovering the video card mounts a muted, looping, playing `<video>` (readyState 4, time advancing); moving away unmounts it.
+
+**Known issues**
+- Preview loads the whole file on hover. Fine for short clips on localhost; a very large video would take a moment before it starts, and the thumbnail shows until it does.
+- Scene mode needs at least 2 real cuts, otherwise it uses even spacing (the item records which it used in `frames.json`). The default stays even.
+- Very long videos get the same 6 frames, so a long edit is described more coarsely. Raise `keyframeCount` in `config.json` (max 12).
+- No audio is analysed, only the picture.
+- Full-size video playback and the detail view arrive in Sprint 4.
+
+**Decisions and trade-offs**
+- Even spacing is the default: it is predictable and fast (6 frames in about 1.3 s), and scene detection costs a full pass over the file.
+- Frames are 1280 px wide JPEGs (about 95 kB each), a balance between detail and what Claude Code needs.
+- Frames are kept after analysis so Retry doesn't redo ffmpeg work; they are deleted when the video changes or goes away.
+- Hover preview uses the original file rather than a generated proxy clip. No extra files to make or clean, at the cost of larger downloads for big videos.
+
+**Needs your decision before Sprint 4:** none blocking.

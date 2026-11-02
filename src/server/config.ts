@@ -8,7 +8,13 @@ export interface Config {
   concurrency: number;
   /** Optional model alias passed to `claude --model`; null uses Claude Code's default. */
   model: string | null;
+  /** 'even' (default) or 'scene' (prefer scene changes, falls back to even). */
+  keyframeMode: 'even' | 'scene';
+  /** Keyframes per video, 2 to 12. */
+  keyframeCount: number;
 }
+
+export const DEFAULT_CONFIG: Config = { sourceFolder: null, concurrency: 2, model: null, keyframeMode: 'even', keyframeCount: 6 };
 
 export function defaultDataDir(): string {
   if (process.env.TASTE_DATA_DIR) return path.resolve(process.env.TASTE_DATA_DIR);
@@ -35,9 +41,11 @@ export function loadConfig(dataDir: string): Config {
       sourceFolder: typeof raw.sourceFolder === 'string' ? raw.sourceFolder : null,
       concurrency: Number.isInteger(raw.concurrency) && raw.concurrency >= 1 && raw.concurrency <= 6 ? raw.concurrency : 2,
       model: typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : null,
+      keyframeMode: raw.keyframeMode === 'scene' ? 'scene' : 'even',
+      keyframeCount: Number.isInteger(raw.keyframeCount) && raw.keyframeCount >= 2 && raw.keyframeCount <= 12 ? raw.keyframeCount : 6,
     };
   } catch {
-    return { sourceFolder: null, concurrency: 2, model: null };
+    return { ...DEFAULT_CONFIG };
   }
 }
 
