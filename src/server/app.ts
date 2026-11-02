@@ -9,6 +9,7 @@ import { effectiveFields, parseJson } from '../analysis/merge.ts';
 import { loadConfig, saveConfig, validateSourceFolder } from './config.ts';
 import { syncLibrary } from './sync.ts';
 import { makeThumb, thumbFile } from './media.ts';
+import { mediaType, parseRange } from './range.ts';
 import { checkTools } from './tools.ts';
 
 export interface AppOptions {
@@ -71,6 +72,7 @@ export function createApp(opts: AppOptions) {
         dataDir,
         concurrency: config.concurrency,
         model: config.model,
+        keyframes: { mode: config.keyframeMode, count: config.keyframeCount },
         onProgress,
         log: analysisLog,
       });
@@ -129,6 +131,7 @@ export function createApp(opts: AppOptions) {
       durationS: row.duration_s,
       error: row.error,
       thumbUrl: `/thumb/${row.id}?v=${row.content_hash.slice(0, 12)}`,
+      mediaUrl: `/media/${row.id}?v=${row.content_hash.slice(0, 12)}`,
     };
   }
 
@@ -165,6 +168,33 @@ export function createApp(opts: AppOptions) {
     }
     res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=31536000, immutable' });
     fs.createReadStream(out).pipe(res);
+  }
+
+  /** Stream an original (read-only) with range support, so videos can seek and preview. */
+  async function serveMedia(id: number, req: http.IncomingMessage, res: http.ServerResponse) {
+    const row = store.getItem(id);
+    if (!row || !config.sourceFolder) return send(res, 404, { error: 'not found' });
+    const file = path.join(config.sourceFolder, ...row.rel_path.split('/'));
+    if (path.relative(config.sourceFolder, file).startsWith('..')) return send(res, 403, { error: 'forbidden' });
+    let size: number;
+    try {
+      size = (await fsp.stat(file)).size;
+    } catch {
+      return send(res, 404, { error: 'file is no longer in the source folder' });
+    }
+    const range = parseRange(req.headers.range, size);
+    const base = { 'content-type': mediaType(path.extname(file)), 'accept-ranges': 'bytes', 'cache-control': 'no-cache' };
+    if (range === 'invalid') {
+      res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });
+      return res.end();
+    }
+    const stream = range
+      ? (res.writeHead(206, { ...base, 'content-length': range.end - range.start + 1, 'content-range': `bytes ${range.start}-${range.end}/${size}` }),
+        fs.createReadStream(file, { start: range.start, end: range.end }))
+      : (res.writeHead(200, { ...base, 'content-length': size }), fs.createReadStream(file));
+    stream.on('error', () => res.destroy());
+    res.on('close', () => stream.destroy());
+    stream.pipe(res);
   }
 
   async function serveStatic(urlPath: string, res: http.ServerResponse) {
@@ -264,6 +294,8 @@ export function createApp(opts: AppOptions) {
       }
       const thumb = p.match(/^\/thumb\/(\d+)$/);
       if (req.method === 'GET' && thumb) return serveThumb(Number(thumb[1]), res);
+      const media = p.match(/^\/media\/(\d+)$/);
+      if (req.method === 'GET' && media) return serveMedia(Number(media[1]), req, res);
       if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(p, res);
       send(res, 404, { error: 'not found' });
     } catch (err) {

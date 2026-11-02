@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { ItemRow, Store } from '../server/db.ts';
+import { extractKeyframes, type KeyframeMode } from './keyframes.ts';
 import { execClaude, OutputError, parseClaudeOutput, type ClaudeExec } from './claude.ts';
 import { analysisSchemaText, buildPrompt } from './prompt.ts';
 import { resolveTags } from './tags.ts';
@@ -14,6 +15,8 @@ export interface AnalyseDeps {
   exec?: ClaudeExec;
   concurrency?: number;
   model?: string | null;
+  /** How video keyframes are chosen. Defaults: 6 evenly spaced frames. */
+  keyframes?: { mode: KeyframeMode; count: number };
   /** Stop starting new items after this many failures in a row (e.g. not signed in). */
   maxConsecutiveFailures?: number;
   onProgress?: (e: ProgressEvent) => void;
@@ -52,8 +55,32 @@ export async function analyseClaimed(deps: AnalyseDeps, row: ItemRow): Promise<'
     return fail('The file is no longer in the source folder.');
   }
 
+  // Images go in as they are. Videos go in as keyframes made in the app data dir, so Claude Code
+  // only needs to read that folder and never opens the original video.
+  let files = [abs];
+  let times: number[] | undefined;
+  let addDirs = [deps.sourceFolder];
+  if (row.kind === 'video') {
+    try {
+      const kf = await extractKeyframes({
+        src: abs,
+        framesRoot: path.join(deps.dataDir, 'frames'),
+        id: row.id,
+        contentHash: row.content_hash,
+        durationS: row.duration_s,
+        mode: deps.keyframes?.mode,
+        count: deps.keyframes?.count,
+      });
+      files = kf.files;
+      times = kf.times;
+      addDirs = [path.join(deps.dataDir, 'frames')];
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   const vocabulary = store.tagVocabulary();
-  const prompt = buildPrompt({ kind: row.kind, files: [abs], tags: vocabulary });
+  const prompt = buildPrompt({ kind: row.kind, files, tags: vocabulary, times });
   let lastError = 'Analysis failed';
 
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -61,7 +88,7 @@ export async function analyseClaimed(deps: AnalyseDeps, row: ItemRow): Promise<'
       const stdout = await exec({
         prompt,
         schema: analysisSchemaText,
-        addDirs: [deps.sourceFolder],
+        addDirs,
         cwd: deps.dataDir,
         model: deps.model,
       });
@@ -85,7 +112,7 @@ export async function analyseClaimed(deps: AnalyseDeps, row: ItemRow): Promise<'
 }
 
 /**
- * Work through pending images until none are left. Items that become pending while
+ * Work through pending items (images and videos) until none are left. Items that become pending while
  * this runs (a retry, a rescan) are picked up too. Safe to run from two processes:
  * each item is claimed atomically.
  */

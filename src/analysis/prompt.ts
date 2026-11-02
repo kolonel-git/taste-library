@@ -15,13 +15,17 @@ export interface PromptInput {
   files: string[];
   /** Current tag vocabulary. */
   tags: string[];
+  /** Video only: when each keyframe was taken, in seconds. */
+  times?: number[];
 }
 
-export function buildPrompt({ kind, files, tags }: PromptInput): string {
-  const list = files.map((f) => `- ${f}`).join('\n');
+export function buildPrompt({ kind, files, tags, times }: PromptInput): string {
+  const list = files
+    .map((f, i) => (kind === 'video' && times?.[i] !== undefined ? `- ${f} (frame ${i + 1} of ${files.length}, at ${times[i]}s)` : `- ${f}`))
+    .join('\n');
   const media =
     kind === 'video'
-      ? `These ${files.length} images are keyframes from ONE video, in time order. Treat them as a single piece: describe the motion, transitions and what changes across frames, and give one combined analysis.\n\n${list}`
+      ? `These ${files.length} images are keyframes from ONE video, in time order. Treat them as a single piece: describe the motion, transitions and what changes across frames, and give one combined analysis. Add a final \`### Motion\` section to the style guide covering pacing, transitions, easing and animation style as far as the frames let you infer them.\n\n${list}`
       : `This is one image:\n\n${list}`;
   const vocab = tags.length ? tags.map((t) => `- ${t}`).join('\n') : '(none yet; you are starting the vocabulary)';
   return template

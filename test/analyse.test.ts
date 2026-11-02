@@ -110,13 +110,13 @@ test('stops after repeated failures and leaves the rest pending', async () => {
   assert.deepEqual(store.countsByStatus(), { pending: 2, analysing: 0, analysed: 0, failed: 3 });
 });
 
-test('videos are left alone in this sprint', async () => {
-  const { source, dataDir, store } = setup({ 'a.png': 'a', 'clip.mp4': 'v' });
+test('a video that cannot be read fails with a clear reason, without calling claude', async () => {
+  const { source, dataDir, store } = setup({ 'a.png': 'a', 'clip.mp4': 'not really a video' });
   const exec = stubExec(() => envelope(goodAnalysis()));
-  const r = await analysePending({ store, sourceFolder: source, dataDir, exec });
-  assert.equal(r.analysed, 1);
-  assert.equal(row(store, 'clip.mp4').status, 'pending');
-  assert.equal(store.countAnalysable(), 0);
+  const r = await analysePending({ store, sourceFolder: source, dataDir, exec, concurrency: 1 });
+  assert.deepEqual([r.analysed, r.failed], [1, 1]);
+  assert.equal(exec.calls, 1); // only the image
+  assert.match(row(store, 'clip.mp4').error!, /video length|keyframes/);
 });
 
 test('concurrency limit is respected and every item is analysed exactly once', async () => {

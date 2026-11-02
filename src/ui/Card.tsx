@@ -19,16 +19,40 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function Card({ item, onRetry }: { item: ItemView; onRetry: (id: number) => void }) {
   const [broken, setBroken] = useState(false);
+  const [hover, setHover] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [noPreview, setNoPreview] = useState(false);
   const ratio = item.width && item.height ? `${item.width} / ${item.height}` : '4 / 3';
   const label = STATUS_LABEL[item.status];
 
   return (
     <article class="card">
-      <div class="media" style={{ aspectRatio: ratio }}>
+      <div
+        class="media"
+        style={{ aspectRatio: ratio }}
+        onMouseEnter={() => item.kind === 'video' && setHover(true)}
+        onMouseLeave={() => {
+          setHover(false);
+          setPlaying(false);
+        }}
+      >
         {broken ? (
           <div class="media-fallback">{stem(item.relPath)}</div>
         ) : (
           <img src={item.thumbUrl} alt={item.title ?? stem(item.relPath)} loading="lazy" onError={() => setBroken(true)} />
+        )}
+        {hover && !noPreview && (
+          <video
+            class={playing ? 'preview on' : 'preview'}
+            src={item.mediaUrl}
+            muted
+            loop
+            autoPlay
+            playsInline
+            preload="auto"
+            onPlaying={() => setPlaying(true)}
+            onError={() => setNoPreview(true)}
+          />
         )}
         {item.kind === 'video' && (
           <span class="vid">

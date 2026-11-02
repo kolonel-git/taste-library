@@ -6,6 +6,7 @@ import { scanFolder, type ScannedFile } from './scanner.ts';
 import { detectChanges } from './changes.ts';
 import { hashFile } from './hash.ts';
 import { probeMedia, removeThumbs, type Probe } from './media.ts';
+import { removeFrames } from '../analysis/keyframes.ts';
 
 export interface SyncOptions {
   store: Store;
@@ -63,10 +64,8 @@ export async function syncLibrary(opts: SyncOptions): Promise<SyncSummary> {
     for (const d of changes.deleted) store.deleteItem(d.id);
   });
 
-  await Promise.all([
-    ...changes.changed.map((c) => removeThumbs(dataDir, c.id)),
-    ...changes.deleted.map((d) => removeThumbs(dataDir, d.id)),
-  ]);
+  const stale = [...changes.changed.map((c) => c.id), ...changes.deleted.map((d) => d.id)];
+  await Promise.all(stale.flatMap((id) => [removeThumbs(dataDir, id), removeFrames(dataDir, id)]));
 
   const summary: SyncSummary = {
     added: changes.added.length,

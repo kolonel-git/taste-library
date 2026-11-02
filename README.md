@@ -31,8 +31,10 @@ npm start
 
 ## Analysis
 
-Each pending image is sent to the Claude Code CLI (`claude -p`, with only the read-only `Read` tool; no other AI service or API key). The prompt and JSON schema live in `src/analysis/` (`prompt.md`, `schema.json`) and are shared by the in-app **Analyse pending** button and the terminal command, so both give the same output. Results are checked against the schema before saving. Failed items show **Analysis failed** with the reason on hover and a **Retry** button.
+Each pending item is sent to the Claude Code CLI (`claude -p`, with only the read-only `Read` tool; no other AI service or API key). The prompt and JSON schema live in `src/analysis/` (`prompt.md`, `schema.json`) and are shared by the in-app **Analyse pending** button and the terminal command, so both give the same output. Results are checked against the schema before saving. Failed items show **Analysis failed** with the reason on hover and a **Retry** button.
 
 Run it from a terminal with `npm run analyse`, or from Claude Code with `/analyse-taste` (inside this project, or anywhere after `npm run install-command`).
 
-Optional settings in `config.json` (in the app data folder): `concurrency` (1 to 6, default 2) and `model` (a `claude --model` alias; default is Claude Code's own).
+Optional settings in `config.json` (in the app data folder): `concurrency` (1 to 6, default 2), `model` (a `claude --model` alias; default is Claude Code's own), `keyframeMode` (`even` default, or `scene`) and `keyframeCount` (2 to 12, default 6).
+
+Videos are analysed as one item: ffmpeg takes keyframes into the app data folder (`frames/`), and those frames, not the original video, are what Claude Code reads. Video cards play a muted preview on hover.

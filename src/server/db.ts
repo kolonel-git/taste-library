@@ -171,18 +171,18 @@ export class Store {
   }
 
   countAnalysable(): number {
-    const row = this.db.prepare("SELECT COUNT(*) AS n FROM items WHERE status = 'pending' AND kind = 'image'").get() as unknown as {
+    const row = this.db.prepare("SELECT COUNT(*) AS n FROM items WHERE status = 'pending'").get() as unknown as {
       n: number;
     };
     return row.n;
   }
 
-  /** Atomically take the next pending image. Safe against a second process doing the same. */
+  /** Atomically take the next pending item. Safe against a second process doing the same. */
   claimNext(): ItemRow | undefined {
     return this.db
       .prepare(
         `UPDATE items SET status = 'analysing', claimed_at = ?, error = NULL
-         WHERE id = (SELECT id FROM items WHERE status = 'pending' AND kind = 'image' ORDER BY id LIMIT 1)
+         WHERE id = (SELECT id FROM items WHERE status = 'pending' ORDER BY id LIMIT 1)
          RETURNING *`,
       )
       .get(now()) as unknown as ItemRow | undefined;
