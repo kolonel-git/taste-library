@@ -11,6 +11,8 @@ export const api = {
   status: () => request<StatusView>('/api/status'),
   items: () => request<ItemView[]>('/api/items'),
   rescan: () => request<{ started: boolean }>('/api/rescan', { method: 'POST' }),
+  analyse: () => request<{ started: boolean }>('/api/analyse', { method: 'POST' }),
+  retry: (id: number) => request<{ started: boolean }>(`/api/items/${id}/retry`, { method: 'POST' }),
   setSourceFolder: (sourceFolder: string) =>
     request<StatusView>('/api/settings', {
       method: 'PUT',

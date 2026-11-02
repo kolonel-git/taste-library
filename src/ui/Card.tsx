@@ -17,7 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
   failed: 'Analysis failed',
 };
 
-export function Card({ item }: { item: ItemView }) {
+export function Card({ item, onRetry }: { item: ItemView; onRetry: (id: number) => void }) {
   const [broken, setBroken] = useState(false);
   const ratio = item.width && item.height ? `${item.width} / ${item.height}` : '4 / 3';
   const label = STATUS_LABEL[item.status];
@@ -40,6 +40,11 @@ export function Card({ item }: { item: ItemView }) {
           <span class={`status ${item.status}`} title={item.error ?? undefined}>
             <i /> {label}
           </span>
+        )}
+        {item.status === 'failed' && (
+          <button class="retry" onClick={() => onRetry(item.id)}>
+            Retry
+          </button>
         )}
       </div>
       <div class="meta">

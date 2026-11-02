@@ -1,0 +1,31 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { ItemKind } from '../shared/types.ts';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const template = fs.readFileSync(path.join(here, 'prompt.md'), 'utf8');
+
+export const analysisSchemaText = fs.readFileSync(path.join(here, 'schema.json'), 'utf8');
+export const analysisSchema = JSON.parse(analysisSchemaText);
+
+export interface PromptInput {
+  kind: ItemKind;
+  /** Absolute paths: one image, or the keyframes of a video in time order. */
+  files: string[];
+  /** Current tag vocabulary. */
+  tags: string[];
+}
+
+export function buildPrompt({ kind, files, tags }: PromptInput): string {
+  const list = files.map((f) => `- ${f}`).join('\n');
+  const media =
+    kind === 'video'
+      ? `These ${files.length} images are keyframes from ONE video, in time order. Treat them as a single piece: describe the motion, transitions and what changes across frames, and give one combined analysis.\n\n${list}`
+      : `This is one image:\n\n${list}`;
+  const vocab = tags.length ? tags.map((t) => `- ${t}`).join('\n') : '(none yet; you are starting the vocabulary)';
+  return template
+    .replace('{{SUBJECT}}', kind === 'video' ? 'a short video, shown as keyframes' : 'an image')
+    .replace('{{MEDIA_INSTRUCTIONS}}', () => media)
+    .replace('{{TAGS}}', () => vocab);
+}

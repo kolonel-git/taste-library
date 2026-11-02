@@ -1,6 +1,39 @@
 export type ItemKind = 'image' | 'video';
 export type ItemStatus = 'pending' | 'analysing' | 'analysed' | 'failed';
 
+export type PaletteRole =
+  | 'primary'
+  | 'secondary'
+  | 'accent'
+  | 'background'
+  | 'surface'
+  | 'text'
+  | 'muted'
+  | 'border';
+
+export interface PaletteColor {
+  hex: string;
+  role: PaletteRole;
+  name?: string;
+}
+
+/** What Claude Code returns for one item; matches src/analysis/schema.json. */
+export interface Analysis {
+  title: string;
+  description: string;
+  styleGuide: string;
+  palette: PaletteColor[];
+  keywords: string[];
+  tags: string[];
+}
+
+export interface AnalysisProgress {
+  running: boolean;
+  done: number;
+  failed: number;
+  remaining: number;
+}
+
 /** An item as the UI sees it: effective values (hand edits over AI output). */
 export interface ItemView {
   id: number;
@@ -38,4 +71,14 @@ export interface StatusView {
   syncError: string | null;
   tools: { ffmpeg: ToolCheck; claude: ToolCheck };
   counts: Record<ItemStatus, number>;
+  /** Pending images that "Analyse pending" would send now. */
+  analysable: number;
+  analysis: AnalysisProgress;
+}
+
+/** Full record for one item (detail view). */
+export interface ItemDetail extends ItemView {
+  effective: Partial<Analysis>;
+  ai: Partial<Analysis>;
+  user: Partial<Analysis>;
 }

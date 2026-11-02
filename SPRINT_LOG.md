@@ -59,3 +59,65 @@ Paste your source folder when asked. `samples/` holds a copy of your UI-UX Inspo
 - Thumbnails are 720 px wide JPEGs.
 
 **Needs your decision before Sprint 2:** none blocking.
+
+## Sprint 2 — Analysis engine (images)
+
+**Goal:** pending images become analysed items, from the app and from the terminal.
+**Stories:** 4 (re-analyse on change, hand edits kept), 5 (Analyse pending button), 6 (terminal command), 7 (title, description, style guide, palette, keywords, tags).
+
+### Planning
+
+| # | Task | Acceptance criteria |
+| --- | --- | --- |
+| 1 | Probe headless Claude Code | Confirm how to pass an image, get schema-checked JSON, keep the run cheap and read-only |
+| 2 | Shared prompt + schema | One `prompt.md` and one `schema.json` under `src/analysis/`, used by both entry points |
+| 3 | Validation + tag vocabulary | Output is checked with ajv before saving. Tags are normalised to kebab-case and mapped onto existing tags (plural, hyphen and case variants collapse) |
+| 4 | Analyser + queue | Items are claimed atomically (`pending` to `analysing`), so the app and a terminal run never double up. Configurable parallelism. Stale claims from a crash are released. A result for a file that changed mid-run is dropped, not saved |
+| 5 | Failure handling | Bad output gets one automatic retry; anything else fails straight away. Failed items show the reason and a Retry button. A run stops after 3 failures in a row (e.g. not signed in) and leaves the rest pending |
+| 6 | Hand edits win | Re-analysis replaces only AI output and AI tag links. `user_json` and user tags are untouched |
+| 7 | App: button, live progress, retry | "Analyse pending (N)" with progress. Cards update live over server-sent events. Per-card Retry |
+| 8 | Terminal: `npm run analyse` + `/analyse-taste` | Scans first (so new files are found without opening the app), then analyses. Same analyser and output as the button |
+| 9 | Tests with a stubbed `claude` | Schema fixtures, tags, merge rule, queue claiming, concurrency, failure and stale-result paths |
+| 10 | End-to-end with real samples | All pending sample images analysed by the real CLI; one forced failure and retry |
+
+### Review
+
+**Built**
+- `src/analysis/`: `prompt.md`, `schema.json`, prompt builder, ajv validation, tag normalising, merge rule (hand edit over AI), `claude -p` runner and the analyser/queue. Shared by the app and the CLI.
+- Claude Code runs headless with only the `Read` tool, the source folder added read-only, no session saved, no slash commands, MCP or user settings loaded, and the prompt sent on stdin. Structured output comes back in `structured_output` and is validated again by us.
+- Store: atomic claim, stale-claim release, stale-result guard, tag vocabulary with pruning (migration 2 adds `claimed_at`).
+- API: `POST /api/analyse`, `POST /api/items/:id/retry`, `GET /api/items/:id` (full effective / AI / user record, for the Sprint 4 detail view), `GET /api/events` (server-sent events).
+- UI: Analyse pending button with live "Analysing 3 of 8", cards fill in with title and tags as they finish, "Analysing…" and "Analysis failed" badges, Retry, failure banner.
+- Terminal: `npm run analyse` and `.claude/commands/analyse-taste.md`; `npm run install-command` copies the slash command to `~/.claude/commands` for use from any folder.
+
+**Try it**
+```bash
+npm start
+```
+Click **Analyse pending**. Or from a terminal: `npm run analyse`. Or inside Claude Code in this folder: `/analyse-taste`. (`npm run install-command` once, to use it from any folder. It writes one file into your `~/.claude/commands`; I did not run it.)
+
+**Test results**
+- `npm test`: 64 of 64 pass (36 new): schema good/bad fixtures, tag folding, hand-edit merge, prompt, CLI output parsing, queue claiming across two runners, concurrency cap, retry and failure paths, stale results, user edits kept on re-analysis, source folder untouched.
+- `npm run typecheck`, `npm run build`: clean.
+- Real run, terminal: `npm run analyse` scanned 9 files and analysed all 8 images with the real Claude Code CLI, 0 failed, 99 s total at 2 in parallel (about 20 to 30 s each). The video stayed pending, as planned for Sprint 3.
+- Real output check: every item got a title, ~3 kB style guide with all nine sections, 7 to 8 palette colours with roles, 12 to 14 keywords and 3 to 5 tags. Tag reuse worked: 12 tags across 8 items (`web-app` on 7, `dashboard` on 6, `dark-mode` on 4) with no near-duplicates.
+- Real failure and retry, in the UI: set an invalid model, Analyse failed with the CLI's own message on the card, fixed the setting, clicked Retry, the card went to "Analysing…" then filled in.
+- Slash command: its body is the same `npm run analyse` the terminal run used. I did not trigger `/analyse-taste` itself from inside this session.
+
+**Known issues**
+- Videos stay "Pending analysis" until Sprint 3. The button count only includes images.
+- A run stops after 3 failures in a row; the rest stay pending until you press the button again.
+- The terminal command and the app can both scan at the same moment; the second one could hit a database conflict and report an error. Rare, retry fixes it.
+- The "N failed" banner only counts failures from the current app session; failed cards stay marked after a restart.
+- No UI yet to see the full analysis (Sprint 4); `GET /api/items/:id` returns it.
+- Cost and rate limits: each analysis is one Claude Code call on your own plan. I did not measure cost per image; a trimmed probe call was about $0.03, and an untrimmed default call about $0.10, which is why the runner strips tools, settings and hooks.
+
+**Decisions and trade-offs**
+- The terminal command scans before analysing. Otherwise, new files would only become pending after opening the app, which defeats story 6.
+- One automatic retry only for malformed output. Timeouts and CLI errors fail immediately, to avoid paying twice for the same problem.
+- Tags are tidied before validation, so "Dark Mode" is accepted rather than failing the whole item. Everything else must match the schema exactly.
+- Parallelism defaults to 2. Raise it in `config.json` if your plan allows.
+- Re-analysis keeps the old AI result until the new one lands, so a card never goes blank mid-run.
+- Removing an AI tag by hand is a Sprint 5 question (user tag edits are designed to sit alongside AI tags; the schema already tracks `source`).
+
+**Needs your decision before Sprint 3:** none blocking.

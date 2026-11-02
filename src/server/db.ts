@@ -67,6 +67,7 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX item_tags_tag ON item_tags(tag_id);
   `,
+  `ALTER TABLE items ADD COLUMN claimed_at TEXT;`,
 ];
 
 export function openDb(file: string): DatabaseSync {
@@ -167,6 +168,87 @@ export class Store {
     }[];
     for (const r of rows) counts[r.status] = r.n;
     return counts;
+  }
+
+  countAnalysable(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS n FROM items WHERE status = 'pending' AND kind = 'image'").get() as unknown as {
+      n: number;
+    };
+    return row.n;
+  }
+
+  /** Atomically take the next pending image. Safe against a second process doing the same. */
+  claimNext(): ItemRow | undefined {
+    return this.db
+      .prepare(
+        `UPDATE items SET status = 'analysing', claimed_at = ?, error = NULL
+         WHERE id = (SELECT id FROM items WHERE status = 'pending' AND kind = 'image' ORDER BY id LIMIT 1)
+         RETURNING *`,
+      )
+      .get(now()) as unknown as ItemRow | undefined;
+  }
+
+  /** Items stuck "analysing" (crashed run) go back to pending after a while. */
+  releaseStaleClaims(maxAgeMs: number): number {
+    const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
+    const res = this.db
+      .prepare("UPDATE items SET status = 'pending', claimed_at = NULL WHERE status = 'analysing' AND (claimed_at IS NULL OR claimed_at < ?)")
+      .run(cutoff);
+    return Number(res.changes);
+  }
+
+  /**
+   * Store an analysis. Only lands if the item is still being analysed for the same
+   * file contents; otherwise the result is stale and dropped. Replaces AI tag links only.
+   */
+  saveAnalysis(id: number, contentHash: string, ai: unknown, tagNames: string[]): boolean {
+    return this.transaction(() => {
+      const t = now();
+      const res = this.db
+        .prepare(
+          `UPDATE items SET ai_json = ?, status = 'analysed', error = NULL, analysed_hash = ?, analysed_at = ?,
+             claimed_at = NULL, updated_at = ? WHERE id = ? AND content_hash = ? AND status = 'analysing'`,
+        )
+        .run(JSON.stringify(ai), contentHash, t, t, id, contentHash);
+      if (Number(res.changes) === 0) return false;
+      this.db.prepare("DELETE FROM item_tags WHERE item_id = ? AND source = 'ai'").run(id);
+      for (const name of tagNames) {
+        this.db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)').run(name);
+        const tag = this.db.prepare('SELECT id FROM tags WHERE name = ?').get(name) as unknown as { id: number };
+        this.db.prepare("INSERT OR IGNORE INTO item_tags (item_id, tag_id, source) VALUES (?, ?, 'ai')").run(id, tag.id);
+      }
+      this.db.prepare('DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM item_tags)').run();
+      return true;
+    });
+  }
+
+  markFailed(id: number, contentHash: string, message: string): boolean {
+    const res = this.db
+      .prepare(
+        `UPDATE items SET status = 'failed', error = ?, claimed_at = NULL, updated_at = ?
+         WHERE id = ? AND content_hash = ? AND status = 'analysing'`,
+      )
+      .run(message.slice(0, 400), now(), id, contentHash);
+    return Number(res.changes) > 0;
+  }
+
+  /** failed -> pending so the next run picks it up again. */
+  retry(id: number): boolean {
+    const res = this.db
+      .prepare("UPDATE items SET status = 'pending', error = NULL, updated_at = ? WHERE id = ? AND status = 'failed'")
+      .run(now(), id);
+    return Number(res.changes) > 0;
+  }
+
+  /** Tag vocabulary, most used first. */
+  tagVocabulary(limit = 300): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT t.name FROM tags t LEFT JOIN item_tags it ON it.tag_id = t.id
+         GROUP BY t.id ORDER BY COUNT(it.item_id) DESC, t.name LIMIT ?`,
+      )
+      .all(limit) as unknown as { name: string }[];
+    return rows.map((r) => r.name);
   }
 
   tagsFor(itemId: number): string[] {
