@@ -28,9 +28,8 @@ export function App() {
       setItems(i);
       setLoadError(null);
       if (s.lastSync && s.lastSync.at !== lastSyncAt.current) {
-        if (lastSyncAt.current !== null || s.lastSync.added || s.lastSync.changed || s.lastSync.deleted) {
-          setToast(summarise(s.lastSync));
-        }
+        // Only announce scans that finish while this page is open, not one from before it loaded.
+        if (lastSyncAt.current !== null) setToast(summarise(s.lastSync));
         lastSyncAt.current = s.lastSync.at;
       }
       return s;
@@ -44,11 +43,26 @@ export function App() {
     void refresh();
   }, [refresh]);
 
-  // Poll quickly while a scan runs, slowly otherwise.
+  // The server pushes a "change" event whenever a scan or analysis moves.
   useEffect(() => {
-    const t = setTimeout(() => void refresh(), status?.syncing ? 600 : 8000);
+    const events = new EventSource('/api/events');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    events.addEventListener('change', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void refresh(), 150);
+    });
+    return () => {
+      clearTimeout(timer);
+      events.close();
+    };
+  }, [refresh]);
+
+  // Fallback poll: quick while work is running (also catches a terminal run), slow otherwise.
+  const busy = status && (status.syncing || status.analysis.running || status.counts.analysing > 0);
+  useEffect(() => {
+    const t = setTimeout(() => void refresh(), busy ? 1500 : 8000);
     return () => clearTimeout(t);
-  }, [status, refresh]);
+  }, [status, busy, refresh]);
 
   useEffect(() => {
     if (!toast) return;
@@ -65,9 +79,32 @@ export function App() {
     }
   };
 
+  const analyse = async () => {
+    try {
+      await api.analyse();
+      setStatus((s) => (s ? { ...s, analysis: { ...s.analysis, running: true } } : s));
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const retry = async (id: number) => {
+    try {
+      await api.retry(id);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   if (!status) {
     return <div class="center muted">{loadError ?? 'Loading…'}</div>;
   }
+
+  const { analysis } = status;
+  const analysing = analysis.running || status.counts.analysing > 0;
+  const progress = analysis.done + analysis.failed;
+  const total = progress + status.analysable + status.counts.analysing;
 
   const missing = (['ffmpeg', 'claude'] as const).filter((t) => !status.tools[t].ok);
   const needsFolder = !status.sourceFolder || editingFolder;
@@ -95,6 +132,14 @@ export function App() {
               <button class="btn" disabled={status.syncing} onClick={rescan}>
                 Rescan
               </button>
+              <button
+                class="btn primary"
+                disabled={analysing || status.analysable === 0 || !status.tools.claude.ok}
+                title={!status.tools.claude.ok ? 'Claude Code CLI not found' : undefined}
+                onClick={analyse}
+              >
+                {analysing ? `Analysing ${Math.min(progress + 1, total)} of ${total}…` : `Analyse pending (${status.analysable})`}
+              </button>
             </>
           )}
         </div>
@@ -105,6 +150,12 @@ export function App() {
           <strong>{t === 'claude' ? 'Claude Code' : 'ffmpeg'} not found.</strong> {status.tools[t].message}
         </div>
       ))}
+      {analysis.running === false && analysis.failed > 0 && (
+        <div class="banner" role="alert">
+          <strong>{analysis.failed} {analysis.failed === 1 ? 'item' : 'items'} failed to analyse.</strong> Hover the badge on a
+          card for the reason, then press Retry.
+        </div>
+      )}
       {status.syncError && (
         <div class="banner" role="alert">
           <strong>Scan failed.</strong> {status.syncError}
@@ -133,7 +184,7 @@ export function App() {
       ) : (
         <main class="grid">
           {items.map((item) => (
-            <Card key={item.id} item={item} />
+            <Card key={item.id} item={item} onRetry={retry} />
           ))}
         </main>
       )}

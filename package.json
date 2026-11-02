@@ -14,9 +14,12 @@
     "dev:ui": "vite",
     "build": "vite build",
     "test": "node --test \"test/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "analyse": "node src/cli/analyse.ts",
+    "install-command": "node scripts/install-command.ts"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
     "preact": "^11.1.1"
   },
   "devDependencies": {

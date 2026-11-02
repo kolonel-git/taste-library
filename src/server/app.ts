@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { ItemRow, Store } from './db.ts';
-import type { ItemView, StatusView, SyncSummary } from '../shared/types.ts';
+import type { AnalysisProgress, ItemDetail, ItemView, StatusView, SyncSummary } from '../shared/types.ts';
+import { analysePending, type ProgressEvent } from '../analysis/analyse.ts';
+import { effectiveFields, parseJson } from '../analysis/merge.ts';
 import { loadConfig, saveConfig, validateSourceFolder } from './config.ts';
 import { syncLibrary } from './sync.ts';
 import { makeThumb, thumbFile } from './media.ts';
@@ -28,12 +30,6 @@ const MIME: Record<string, string> = {
 
 class BadRequest extends Error {}
 
-function effective(row: ItemRow): { title: string | null } {
-  const user = row.user_json ? JSON.parse(row.user_json) : {};
-  const ai = row.ai_json ? JSON.parse(row.ai_json) : {};
-  return { title: user.title ?? ai.title ?? null };
-}
-
 export function createApp(opts: AppOptions) {
   const { store, dataDir, uiDir } = opts;
   let config = loadConfig(dataDir);
@@ -43,12 +39,49 @@ export function createApp(opts: AppOptions) {
   let syncError: string | null = null;
   const thumbJobs = new Map<string, Promise<void>>();
   const logFile = path.join(dataDir, 'logs', 'scan.log');
+  const analysisLogFile = path.join(dataDir, 'logs', 'analysis.log');
+  let analysis: AnalysisProgress = { running: false, done: 0, failed: 0, remaining: 0 };
+  const clients = new Set<http.ServerResponse>();
 
-  const log = (line: string) => {
+  const write = (file: string) => (line: string) => {
     const stamped = `${new Date().toISOString()} ${line}`;
     console.log(stamped);
-    fsp.appendFile(logFile, stamped + '\n').catch(() => {});
+    fsp.appendFile(file, stamped + '\n').catch(() => {});
   };
+  const log = write(logFile);
+  const analysisLog = write(analysisLogFile);
+
+  /** Tell open pages something changed; they refetch. */
+  function broadcast() {
+    for (const res of clients) res.write('event: change\ndata: {}\n\n');
+  }
+
+  async function startAnalysis(): Promise<boolean> {
+    if (analysis.running || !config.sourceFolder) return false;
+    analysis = { running: true, done: 0, failed: 0, remaining: store.countAnalysable() };
+    broadcast();
+    const onProgress = (e: ProgressEvent) => {
+      if (e.type === 'batch') analysis = { ...analysis, done: e.done, failed: e.failed, remaining: e.remaining };
+      broadcast();
+    };
+    try {
+      await analysePending({
+        store,
+        sourceFolder: config.sourceFolder,
+        dataDir,
+        concurrency: config.concurrency,
+        model: config.model,
+        onProgress,
+        log: analysisLog,
+      });
+    } catch (err) {
+      analysisLog(`ERROR analysis run: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      analysis = { ...analysis, running: false, remaining: store.countAnalysable() };
+      broadcast();
+    }
+    return true;
+  }
 
   async function refreshTools() {
     tools = await checkTools();
@@ -66,6 +99,7 @@ export function createApp(opts: AppOptions) {
       log(`ERROR sync: ${syncError}`);
     } finally {
       syncing = false;
+      broadcast();
     }
   }
 
@@ -77,23 +111,36 @@ export function createApp(opts: AppOptions) {
       syncError,
       tools,
       counts: store.countsByStatus(),
+      analysable: store.countAnalysable(),
+      analysis,
     };
   }
 
-  function items(): ItemView[] {
-    return store.allItems().map((row) => ({
+  function view(row: ItemRow): ItemView {
+    return {
       id: row.id,
       relPath: row.rel_path,
       kind: row.kind,
       status: row.status,
-      title: effective(row).title,
+      title: effectiveFields(row.ai_json, row.user_json).title ?? null,
       tags: store.tagsFor(row.id),
       width: row.width,
       height: row.height,
       durationS: row.duration_s,
       error: row.error,
       thumbUrl: `/thumb/${row.id}?v=${row.content_hash.slice(0, 12)}`,
-    }));
+    };
+  }
+
+  const items = (): ItemView[] => store.allItems().map(view);
+
+  function detail(row: ItemRow): ItemDetail {
+    return {
+      ...view(row),
+      effective: effectiveFields(row.ai_json, row.user_json),
+      ai: parseJson(row.ai_json),
+      user: parseJson(row.user_json),
+    };
   }
 
   async function serveThumb(id: number, res: http.ServerResponse) {
@@ -169,6 +216,32 @@ export function createApp(opts: AppOptions) {
 
       if (req.method === 'GET' && p === '/api/status') return send(res, 200, status());
       if (req.method === 'GET' && p === '/api/items') return send(res, 200, items());
+      if (req.method === 'GET' && p === '/api/events') {
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+        res.write('retry: 3000\n\n');
+        clients.add(res);
+        req.on('close', () => clients.delete(res));
+        return;
+      }
+      const one = p.match(/^\/api\/items\/(\d+)$/);
+      if (req.method === 'GET' && one) {
+        const row = store.getItem(Number(one[1]));
+        return row ? send(res, 200, detail(row)) : send(res, 404, { error: 'not found' });
+      }
+      const retry = p.match(/^\/api\/items\/(\d+)\/retry$/);
+      if (req.method === 'POST' && retry) {
+        if (!store.retry(Number(retry[1]))) return send(res, 409, { error: 'Only failed items can be retried.' });
+        broadcast();
+        if (tools.claude.ok) void startAnalysis();
+        return send(res, 202, { started: tools.claude.ok });
+      }
+      if (req.method === 'POST' && p === '/api/analyse') {
+        if (!config.sourceFolder) return send(res, 400, { error: 'No source folder set.' });
+        if (!tools.claude.ok) return send(res, 400, { error: tools.claude.message ?? 'Claude Code CLI not found.' });
+        if (analysis.running) return send(res, 202, { started: false, running: true });
+        void startAnalysis();
+        return send(res, 202, { started: true });
+      }
       if (req.method === 'POST' && p === '/api/rescan') {
         if (!config.sourceFolder) return send(res, 400, { error: 'No source folder set.' });
         if (!syncing) void rescan();
@@ -196,6 +269,15 @@ export function createApp(opts: AppOptions) {
     } catch (err) {
       send(res, err instanceof BadRequest ? 400 : 500, { error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  const heartbeat = setInterval(() => {
+    for (const res of clients) res.write(': ping\n\n');
+  }, 25_000);
+  heartbeat.unref();
+  server.on('close', () => {
+    clearInterval(heartbeat);
+    for (const res of clients) res.end();
   });
 
   return { server, rescan, refreshTools, log, hasSource: () => Boolean(config.sourceFolder) };
