@@ -8,7 +8,7 @@ Produce these fields:
 
 **title**: a short, evocative name (2 to 60 characters). Describe the feel, not the file. Good: "Midnight Ledger Dashboard". Bad: "Screenshot 3" or "UI design".
 
-**description**: a literal description of what the image contains: the product or scene, the main sections, notable components, key text and data, imagery, and how the pieces relate. Write 200 to 300 words (never more than 300) in two short paragraphs, plain prose, no lists. This field is about THIS image; the style guide and prompt below are not.
+**description**: a literal description of what the image contains: the product or scene, the main sections, notable components, key text and data, imagery, and how the pieces relate. Write 150 to 200 words (never more than 200) in one or two short paragraphs, plain prose, no lists. This field is about THIS image; the style guide below is not.
 
 **styleGuide**: a Markdown design system distilled from the reference. Treat the image as evidence of a design language and write the rules of that language, so someone could build screens that are nowhere in the image and still look like they belong to it.
 
@@ -17,6 +17,8 @@ How to write it:
 - Be concrete and token-like: hex values, px or rem sizes, weights, ratios, durations, easing curves, radii, shadow recipes. No vague adjectives on their own.
 - Cover components that do NOT appear in the image by extrapolating from the language that does. Mark anything you inferred rather than saw with "(inferred)". Never leave out a core component just because the image lacks it.
 - Where the image gives no evidence for a value, choose one that is consistent with the rest and say it is inferred.
+
+The guide must be paste-ready for an AI design or coding agent in a brand new project. Open it with one plain sentence before the first heading: "Use the following design system for everything you build in this project." Never mention the reference image, "the screenshot", "the video" or this library anywhere in it; state rules, not observations about the image. After the last section, add one closing line: "Where this document is silent, extrapolate from the principles above and keep the result consistent with them. If a request conflicts with this system, say so and follow the system unless told otherwise."
 
 Use exactly these level-3 headings, in this order:
 - `### Design principles`: 4 to 6 short rules that capture the character of the system and how to make decisions in it.
@@ -32,13 +34,6 @@ Use exactly these level-3 headings, in this order:
 - `### Content & voice`: tone, label and button copy style, number and date formatting, microcopy patterns.
 - `### Accessibility`: contrast targets for the key colour pairs, focus treatment, minimum sizes, motion preferences.
 - `### Do and don't`: 5 to 8 crisp rules that keep new work faithful to the system.
-
-**stylePrompt**: a self-contained instruction block, addressed to an AI design or coding agent, that someone can paste into a brand new project so the agent builds in this style. Rules for it:
-- Start with "Use the following design system for everything you build in this project." and then give the system compactly: principles, colour tokens with hex values, type scale, spacing scale, radii, shadows, layout rules, component behaviour for the common set, iconography, imagery, motion, voice, accessibility, and do and don't rules. Format it as Markdown: short `##` headings for each area and bullet lists beneath them, no tables, no code fences.
-- It must stand alone: never mention the reference image, "the screenshot", "the video", or this library. State rules, not observations.
-- Make it directly actionable: say what to do in imperative sentences ("Use 8px as the base spacing unit", "Primary buttons are #F5A524 with dark text").
-- End with: "Where this document is silent, extrapolate from the principles above and keep the result consistent with them. If a request conflicts with this system, say so and follow the system unless told otherwise."
-- Aim for roughly 500 to 900 words.
 
 **palette**: 6 to 10 of the most important colours as hex codes (`#RRGGBB`), each with a role: primary, secondary, accent, background, surface, text, muted, border, success, warning, danger or info. Estimate hex values carefully from what you see; infer semantic roles only if the image does not show them and mark nothing here as inferred (just give a sensible value consistent with the palette). An optional short `name` is welcome (for example "Ink", "Signal orange").
 

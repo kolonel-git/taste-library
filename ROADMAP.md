@@ -4,7 +4,7 @@ A local, visual library of UI and design inspiration, built from a folder of
 images and videos. Claude Code (headless) analyses each item into a title,
 description, style guide, palette, keywords and tags.
 
-Status: **draft — awaiting product owner approval.**
+Status: **v1 built (Sprints 1 to 5). See SPRINT_LOG.md.**
 
 ---
 

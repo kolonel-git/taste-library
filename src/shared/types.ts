@@ -26,8 +26,6 @@ export interface Analysis {
   title: string;
   description: string;
   styleGuide: string;
-  /** Paste-ready instruction block for an AI agent to use this style in a new project. */
-  stylePrompt: string;
   palette: PaletteColor[];
   keywords: string[];
   tags: string[];
@@ -52,6 +50,8 @@ export interface ItemView {
   height: number | null;
   durationS: number | null;
   error: string | null;
+  /** When the current analysis finished (ISO), if any. */
+  analysedAt: string | null;
   thumbUrl: string;
   /** Original file, streamed with range support. */
   mediaUrl: string;

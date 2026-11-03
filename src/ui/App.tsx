@@ -4,7 +4,9 @@ import { api } from './api.ts';
 import { Card } from './Card.tsx';
 import { FolderForm } from './FolderForm.tsx';
 import { Detail } from './Detail.tsx';
+import { FilterBar } from './FilterBar.tsx';
 import { parseRoute, routeFor } from '../shared/route.ts';
+import { filterByTags, isSortKey, parseTagsParam, sortItems, tagCounts, toggleTag, withTagsParam, type SortKey } from '../shared/filter.ts';
 
 function summarise(s: SyncSummary): string {
   const parts = [
@@ -23,6 +25,29 @@ export function App() {
   const [toast, setToast] = useState<string | null>(null);
   const lastSyncAt = useRef<string | null>(null);
   const [openId, setOpenId] = useState<number | null>(() => parseRoute(location.hash));
+  const [selected, setSelected] = useState<string[]>(() => parseTagsParam(location.search));
+  const [sort, setSort] = useState<SortKey>(() => {
+    try {
+      const saved = localStorage.getItem('taste-library:sort');
+      return isSortKey(saved) ? saved : 'newest';
+    } catch {
+      return 'newest';
+    }
+  });
+
+  // The filter lives in the URL (?tags=a,b) so a refresh or a bookmark keeps it.
+  const changeTags = useCallback((next: string[]) => {
+    setSelected(next);
+    history.replaceState(null, '', location.pathname + withTagsParam(location.search, next) + location.hash);
+  }, []);
+  const changeSort = useCallback((next: SortKey) => {
+    setSort(next);
+    try {
+      localStorage.setItem('taste-library:sort', next);
+    } catch {
+      /* remembering the sort is a convenience only */
+    }
+  }, []);
 
   // The URL hash is the source of truth for which item is open (Back, refresh and links just work).
   useEffect(() => {
@@ -147,13 +172,38 @@ This uses your Claude plan (roughly a minute per item). Hand edits are kept.`)) 
   };
 
   if (!status) {
-    return <div class="center muted">{loadError ?? 'Loading…'}</div>;
+    return (
+      <div class="shell">
+        <header class="bar">
+          <h1 class="wordmark">
+            Taste <em>Library</em>
+          </h1>
+        </header>
+        {loadError ? (
+          <div class="banner" role="alert">
+            <strong>Cannot reach the library server.</strong> {loadError} Is the app still running?
+          </div>
+        ) : (
+          <main class="grid" aria-busy="true" aria-label="Loading the library">
+            {[4 / 3, 1, 3 / 4, 4 / 3, 1, 4 / 3].map((r, i) => (
+              <div class="card" key={i}>
+                <div class="media skeleton-tile" style={{ aspectRatio: String(r) }} />
+              </div>
+            ))}
+          </main>
+        )}
+      </div>
+    );
   }
 
   const { analysis } = status;
   const analysing = analysis.running || status.counts.analysing > 0;
   const progress = analysis.done + analysis.failed;
   const total = progress + status.analysable + status.counts.analysing;
+
+  const counts = tagCounts(items);
+  const visible = sortItems(filterByTags(items, selected), sort);
+  const filtering = selected.length > 0;
 
   const missing = (['ffmpeg', 'claude'] as const).filter((t) => !status.tools[t].ok);
   const needsFolder = !status.sourceFolder || editingFolder;
@@ -241,17 +291,50 @@ This uses your Claude plan (roughly a minute per item). Hand edits are kept.`)) 
           {status.syncing ? 'Reading your folder…' : 'No images or videos found in this folder yet.'}
         </div>
       ) : (
-        <main class="grid">
-          {items.map((item) => (
-            <Card key={item.id} item={item} onRetry={retry} />
-          ))}
-        </main>
+        <>
+          <FilterBar
+            counts={counts}
+            selected={selected}
+            shown={visible.length}
+            total={items.length}
+            sort={sort}
+            onToggle={(tag) => changeTags(toggleTag(selected, tag))}
+            onClear={() => changeTags([])}
+            onSort={changeSort}
+          />
+          {visible.length === 0 ? (
+            <div class="center muted empty">
+              <p>
+                No item has {selected.length === 1 ? 'the tag' : 'all of these tags'}: <strong>{selected.join(', ')}</strong>
+              </p>
+              <button class="btn" onClick={() => changeTags([])}>
+                Clear filter
+              </button>
+            </div>
+          ) : (
+            <main class="grid" aria-label={filtering ? 'Filtered library' : 'Library'}>
+              {visible.map((item) => (
+                <Card key={item.id} item={item} activeTags={selected} onTag={(tag) => changeTags(toggleTag(selected, tag))} onRetry={retry} />
+              ))}
+            </main>
+          )}
+        </>
       )}
 
       {openId !== null && items.length > 0 && (() => {
         const open = items.find((i) => i.id === openId);
         return open ? (
-          <Detail item={open} ids={items.map((i) => i.id)} onClose={closeDetail} onGo={goTo} onRetry={retry} onReanalyse={reanalyse} notify={setToast} />
+          <Detail
+            item={open}
+            ids={visible.map((i) => i.id)}
+            vocabulary={counts.map((t) => t.name)}
+            onClose={closeDetail}
+            onGo={goTo}
+            onRetry={retry}
+            onReanalyse={reanalyse}
+            onEdited={() => void refresh()}
+            notify={setToast}
+          />
         ) : (
           <div class="backdrop" onMouseDown={closeDetail}>
             <div class="sheet missing" role="dialog" aria-label="Item not found">

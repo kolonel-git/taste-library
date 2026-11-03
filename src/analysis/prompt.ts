@@ -8,9 +8,10 @@ const template = fs.readFileSync(path.join(here, 'prompt.md'), 'utf8');
 
 /**
  * Bump when prompt.md or schema.json change in a way that makes older analyses worth redoing.
- * 1 = original per-image style guide. 2 = generic design system + paste-ready style prompt.
+ * 1 = original per-image style guide. 2 = generic design system + separate style prompt.
+ * 3 = one paste-ready design-system guide (no separate prompt), 150 to 200 word description.
  */
-export const ANALYSIS_VERSION = 2;
+export const ANALYSIS_VERSION = 3;
 
 export const analysisSchemaText = fs.readFileSync(path.join(here, 'schema.json'), 'utf8');
 export const analysisSchema = JSON.parse(analysisSchemaText);

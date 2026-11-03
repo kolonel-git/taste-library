@@ -39,10 +39,16 @@ Optional settings in `config.json` (in the app data folder): `concurrency` (1 to
 
 Videos are analysed as one item: ffmpeg takes keyframes into the app data folder (`frames/`), and those frames, not the original video, are what Claude Code reads. Video cards play a muted preview on hover.
 
-Click any card to open it: full-size image or playable video, description, palette swatches (click to copy a hex), keywords and the style guide. **Copy everything**, **Copy style guide** and **Copy keywords** put Markdown or plain text on the clipboard. Esc closes, the arrow keys move between items, and the URL (`#/item/12`) can be bookmarked.
+Click any card to open it: full-size image or playable video, description, palette swatches (click to copy a hex), keywords and the style guide (Preview or Raw Markdown). Every section has a copy icon, and the icon in the top bar copies everything as Markdown. Esc closes, the arrow keys move between items, and the URL (`#/item/12`) can be bookmarked.
 
-### Style prompt and older analyses
+### The style guide and older analyses
 
-Each analysis includes a **style guide** written as a generic design system (principles, colour tokens, type scale, spacing, shape and elevation, a full component set, iconography, imagery, motion, voice, accessibility, do and don't) and a **style prompt**: a self-contained block you can paste into a new project so Claude or any other agent builds in that style. Parts the reference does not show are extrapolated and marked "(inferred)".
+Each analysis includes a **style guide** written as a generic design system (principles, colour tokens, type scale, spacing, shape and elevation, a full component set, iconography, imagery, motion, voice, accessibility, do and don't). It opens with "Use the following design system for everything you build in this project." and ends by telling the agent to extrapolate where it is silent, so you can paste it straight into a new project for Claude or any other agent. Parts the reference does not show are extrapolated and marked "(inferred)". The description is a 150 to 200 word account of what the image contains.
 
 If you have analyses made with an earlier prompt, the header shows **Update N older**; the detail sheet has a **Re-analyse** button for a single item. From a terminal: `npm run analyse -- --reanalyse`. Hand edits are kept. A fuller analysis takes roughly a minute per item.
+
+### Filtering, sorting and editing
+
+- **Filter:** the bar under the header lists every tag with how many items carry it. Select one or more to show only items that have all of them. Tags on cards work the same way. The filter is kept in the address (`?tags=dashboard,dark-mode`), so a refresh or a bookmark keeps it. **Sort** by newest, A to Z or recently analysed.
+- **Edit:** in the detail sheet, the pencil next to the title, tags, description, keywords and style guide opens an editor (Enter or Ctrl+Enter saves, Esc cancels). Edited fields are marked **Edited** with **Revert to AI**. Tags autocomplete from your existing tags.
+- **Your edits always win:** a re-analysis only replaces the AI's version. An edited field, and an edited tag list, stay exactly as you set them. Edits live in the local database only; the source folder is never touched.
