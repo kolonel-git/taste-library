@@ -111,8 +111,24 @@ test('falls back to JSON in result', () => {
   assert.deepEqual(parseClaudeOutput(JSON.stringify({ is_error: false, result: '{"a":2}' })), { a: 2 });
 });
 
+test('an expired or missing login gets a plain-English fix, not the raw CLI text', () => {
+  for (const msg of [
+    'Failed to authenticate: OAuth session expired and could not be refreshed',
+    'Not logged in. Run claude login.',
+    'Invalid API key · Please run /login',
+  ]) {
+    assert.throws(
+      () => parseClaudeOutput(JSON.stringify({ is_error: true, result: msg })),
+      /not signed in.*claude auth login.*Retry/s,
+      msg,
+    );
+  }
+  // other CLI errors keep their own text
+  assert.throws(() => parseClaudeOutput(JSON.stringify({ is_error: true, result: 'Rate limit reached' })), /Rate limit reached/);
+});
+
 test('error envelope, junk and empty results are failures', () => {
-  assert.throws(() => parseClaudeOutput(JSON.stringify({ is_error: true, result: 'Not logged in' })), /Not logged in/);
+  assert.throws(() => parseClaudeOutput(JSON.stringify({ is_error: true, result: 'Overloaded, try later' })), /Overloaded/);
   assert.throws(() => parseClaudeOutput('Segmentation fault'), OutputError);
   assert.throws(() => parseClaudeOutput(JSON.stringify({ is_error: false, result: 'sorry, cannot' })), OutputError);
 });

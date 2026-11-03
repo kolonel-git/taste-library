@@ -6,16 +6,21 @@ import type { ItemRow, Store } from './db.ts';
 import type { AnalysisProgress, ItemDetail, ItemView, StatusView, SyncSummary } from '../shared/types.ts';
 import { analysePending, type ProgressEvent } from '../analysis/analyse.ts';
 import { effectiveFields, parseJson } from '../analysis/merge.ts';
+import { ANALYSIS_VERSION } from '../analysis/prompt.ts';
 import { loadConfig, saveConfig, validateSourceFolder } from './config.ts';
 import { syncLibrary } from './sync.ts';
 import { makeThumb, thumbFile } from './media.ts';
 import { mediaType, parseRange } from './range.ts';
 import { checkTools } from './tools.ts';
+import type { ClaudeExec } from '../analysis/claude.ts';
 
 export interface AppOptions {
   store: Store;
   dataDir: string;
   uiDir: string;
+  /** Test seams: replace the real `claude` runner and tool check. */
+  exec?: ClaudeExec;
+  checkTools?: typeof checkTools;
 }
 
 const MIME: Record<string, string> = {
@@ -72,6 +77,7 @@ export function createApp(opts: AppOptions) {
         dataDir,
         concurrency: config.concurrency,
         model: config.model,
+        exec: opts.exec,
         keyframes: { mode: config.keyframeMode, count: config.keyframeCount },
         onProgress,
         log: analysisLog,
@@ -86,7 +92,7 @@ export function createApp(opts: AppOptions) {
   }
 
   async function refreshTools() {
-    tools = await checkTools();
+    tools = await (opts.checkTools ?? checkTools)();
     for (const [name, t] of Object.entries(tools)) if (!t.ok) log(`WARNING ${name}: ${t.message}`);
   }
 
@@ -114,6 +120,7 @@ export function createApp(opts: AppOptions) {
       tools,
       counts: store.countsByStatus(),
       analysable: store.countAnalysable(),
+      outdated: store.countOutdated(ANALYSIS_VERSION),
       analysis,
     };
   }
@@ -140,6 +147,7 @@ export function createApp(opts: AppOptions) {
   function detail(row: ItemRow): ItemDetail {
     return {
       ...view(row),
+      outdated: row.status === 'analysed' && row.analysis_version < ANALYSIS_VERSION,
       effective: effectiveFields(row.ai_json, row.user_json),
       ai: parseJson(row.ai_json),
       user: parseJson(row.user_json),
@@ -264,6 +272,21 @@ export function createApp(opts: AppOptions) {
         broadcast();
         if (tools.claude.ok) void startAnalysis();
         return send(res, 202, { started: tools.claude.ok });
+      }
+      const again = p.match(/^\/api\/items\/(\d+)\/reanalyse$/);
+      if (req.method === 'POST' && again) {
+        if (!tools.claude.ok) return send(res, 400, { error: tools.claude.message ?? 'Claude Code CLI not found.' });
+        if (store.requeue(ANALYSIS_VERSION, Number(again[1])) === 0) return send(res, 409, { error: 'Only analysed items can be re-analysed.' });
+        broadcast();
+        void startAnalysis();
+        return send(res, 202, { started: true });
+      }
+      if (req.method === 'POST' && p === '/api/reanalyse-outdated') {
+        if (!tools.claude.ok) return send(res, 400, { error: tools.claude.message ?? 'Claude Code CLI not found.' });
+        const queued = store.requeue(ANALYSIS_VERSION);
+        broadcast();
+        if (queued > 0) void startAnalysis();
+        return send(res, 202, { started: queued > 0, queued });
       }
       if (req.method === 'POST' && p === '/api/analyse') {
         if (!config.sourceFolder) return send(res, 400, { error: 'No source folder set.' });

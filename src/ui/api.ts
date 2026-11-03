@@ -1,4 +1,4 @@
-import type { ItemView, StatusView } from '../shared/types.ts';
+import type { ItemDetail, ItemView, StatusView } from '../shared/types.ts';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -10,8 +10,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const api = {
   status: () => request<StatusView>('/api/status'),
   items: () => request<ItemView[]>('/api/items'),
+  item: (id: number) => request<ItemDetail>(`/api/items/${id}`),
   rescan: () => request<{ started: boolean }>('/api/rescan', { method: 'POST' }),
   analyse: () => request<{ started: boolean }>('/api/analyse', { method: 'POST' }),
+  reanalyse: (id: number) => request<{ started: boolean }>(`/api/items/${id}/reanalyse`, { method: 'POST' }),
+  reanalyseOutdated: () => request<{ started: boolean; queued: number }>('/api/reanalyse-outdated', { method: 'POST' }),
   retry: (id: number) => request<{ started: boolean }>(`/api/items/${id}/retry`, { method: 'POST' }),
   setSourceFolder: (sourceFolder: string) =>
     request<StatusView>('/api/settings', {

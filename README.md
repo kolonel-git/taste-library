@@ -18,7 +18,7 @@ npm start
 | `npm start` | Build UI, run server, open browser |
 | `npm run server` | Run server only (no build, no browser) |
 | `npm run dev:server` / `npm run dev:ui` | Watch mode: API on 4477, Vite UI with hot reload |
-| `npm run analyse` | Scan, then analyse every pending image with Claude Code (what `/analyse-taste` runs) |
+| `npm run analyse` | Scan, then analyse every pending item with Claude Code (what `/analyse-taste` runs). Add `-- --reanalyse` to redo older analyses |
 | `npm run install-command` | Install `/analyse-taste` into `~/.claude/commands` so it works from any folder |
 | `npm test` | Automated tests |
 | `npm run typecheck` | TypeScript check |
@@ -38,3 +38,11 @@ Run it from a terminal with `npm run analyse`, or from Claude Code with `/analys
 Optional settings in `config.json` (in the app data folder): `concurrency` (1 to 6, default 2), `model` (a `claude --model` alias; default is Claude Code's own), `keyframeMode` (`even` default, or `scene`) and `keyframeCount` (2 to 12, default 6).
 
 Videos are analysed as one item: ffmpeg takes keyframes into the app data folder (`frames/`), and those frames, not the original video, are what Claude Code reads. Video cards play a muted preview on hover.
+
+Click any card to open it: full-size image or playable video, description, palette swatches (click to copy a hex), keywords and the style guide. **Copy everything**, **Copy style guide** and **Copy keywords** put Markdown or plain text on the clipboard. Esc closes, the arrow keys move between items, and the URL (`#/item/12`) can be bookmarked.
+
+### Style prompt and older analyses
+
+Each analysis includes a **style guide** written as a generic design system (principles, colour tokens, type scale, spacing, shape and elevation, a full component set, iconography, imagery, motion, voice, accessibility, do and don't) and a **style prompt**: a self-contained block you can paste into a new project so Claude or any other agent builds in that style. Parts the reference does not show are extrapolated and marked "(inferred)".
+
+If you have analyses made with an earlier prompt, the header shows **Update N older**; the detail sheet has a **Re-analyse** button for a single item. From a terminal: `npm run analyse -- --reanalyse`. Hand edits are kept. A fuller analysis takes roughly a minute per item.

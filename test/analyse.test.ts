@@ -86,7 +86,7 @@ test('an error envelope (for example not signed in) fails the item with the CLI 
   const { source, dataDir, store } = setup();
   const exec = stubExec(() => JSON.stringify({ is_error: true, result: 'Not logged in. Run claude login.' }));
   await analysePending({ store, sourceFolder: source, dataDir, exec });
-  assert.match(row(store, 'a.png').error!, /Not logged in/);
+  assert.match(row(store, 'a.png').error!, /not signed in.*claude auth login/s);
 });
 
 test('a file removed before analysis fails cleanly without calling claude', async () => {

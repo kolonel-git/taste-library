@@ -6,6 +6,12 @@ import type { ItemKind } from '../shared/types.ts';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const template = fs.readFileSync(path.join(here, 'prompt.md'), 'utf8');
 
+/**
+ * Bump when prompt.md or schema.json change in a way that makes older analyses worth redoing.
+ * 1 = original per-image style guide. 2 = generic design system + paste-ready style prompt.
+ */
+export const ANALYSIS_VERSION = 2;
+
 export const analysisSchemaText = fs.readFileSync(path.join(here, 'schema.json'), 'utf8');
 export const analysisSchema = JSON.parse(analysisSchemaText);
 

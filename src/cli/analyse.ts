@@ -5,9 +5,11 @@
  *
  *   npm run analyse            scan, then analyse
  *   npm run analyse -- --no-scan
+ *   npm run analyse -- --reanalyse   also redo analyses made with an older prompt
  */
 import path from 'node:path';
 import { analysePending } from '../analysis/analyse.ts';
+import { ANALYSIS_VERSION } from '../analysis/prompt.ts';
 import { defaultDataDir, ensureDataDirs, loadConfig } from '../server/config.ts';
 import { openDb, Store } from '../server/db.ts';
 import { syncLibrary } from '../server/sync.ts';
@@ -39,6 +41,11 @@ if (!skipScan) {
     console.error(err instanceof Error ? err.message : err);
     process.exit(2);
   }
+}
+
+if (process.argv.includes('--reanalyse')) {
+  const queued = store.requeue(ANALYSIS_VERSION);
+  console.log(`Queued ${queued} older analys${queued === 1 ? 'is' : 'es'} to be redone with the current prompt.`);
 }
 
 const waiting = store.countAnalysable();

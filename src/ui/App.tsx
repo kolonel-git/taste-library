@@ -3,6 +3,8 @@ import type { ItemView, StatusView, SyncSummary } from '../shared/types.ts';
 import { api } from './api.ts';
 import { Card } from './Card.tsx';
 import { FolderForm } from './FolderForm.tsx';
+import { Detail } from './Detail.tsx';
+import { parseRoute, routeFor } from '../shared/route.ts';
 
 function summarise(s: SyncSummary): string {
   const parts = [
@@ -20,6 +22,23 @@ export function App() {
   const [editingFolder, setEditingFolder] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const lastSyncAt = useRef<string | null>(null);
+  const [openId, setOpenId] = useState<number | null>(() => parseRoute(location.hash));
+
+  // The URL hash is the source of truth for which item is open (Back, refresh and links just work).
+  useEffect(() => {
+    const onHash = () => setOpenId(parseRoute(location.hash));
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const closeDetail = useCallback(() => {
+    // Drop the hash without leaving a "closed" entry that Back would reopen.
+    history.pushState(null, '', location.pathname + location.search);
+    setOpenId(null);
+  }, []);
+  const goTo = useCallback((id: number) => {
+    history.replaceState(null, '', routeFor(id));
+    setOpenId(id);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -89,6 +108,27 @@ export function App() {
     }
   };
 
+  const reanalyse = async (id: number) => {
+    try {
+      await api.reanalyse(id);
+      setToast('Queued for re-analysis');
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const reanalyseOutdated = async () => {
+    const n = status?.outdated ?? 0;
+    if (!window.confirm(`Re-analyse ${n} ${n === 1 ? 'item' : 'items'} with the current, fuller prompt?
+
+This uses your Claude plan (roughly a minute per item). Hand edits are kept.`)) return;
+    try {
+      await api.reanalyseOutdated();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const retry = async (id: number) => {
     try {
       await api.retry(id);
@@ -132,6 +172,11 @@ export function App() {
               <button class="btn" disabled={status.syncing} onClick={rescan}>
                 Rescan
               </button>
+              {status.outdated > 0 && !analysing && status.tools.claude.ok && (
+                <button class="btn" onClick={reanalyseOutdated} title="Redo older analyses with the fuller design-system prompt">
+                  Update {status.outdated} older
+                </button>
+              )}
               <button
                 class="btn primary"
                 disabled={analysing || status.analysable === 0 || !status.tools.claude.ok}
@@ -188,6 +233,20 @@ export function App() {
           ))}
         </main>
       )}
+
+      {openId !== null && items.length > 0 && (() => {
+        const open = items.find((i) => i.id === openId);
+        return open ? (
+          <Detail item={open} ids={items.map((i) => i.id)} onClose={closeDetail} onGo={goTo} onRetry={retry} onReanalyse={reanalyse} notify={setToast} />
+        ) : (
+          <div class="backdrop" onMouseDown={closeDetail}>
+            <div class="sheet missing" role="dialog" aria-label="Item not found">
+              <p>That item is no longer in the library.</p>
+              <button class="btn primary" onClick={closeDetail}>Back to the library</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {toast && <div class="toast" role="status">{toast}</div>}
     </div>

@@ -176,3 +176,86 @@ Rescan, click **Analyse pending**, then hover the video card.
 - Hover preview uses the original file rather than a generated proxy clip. No extra files to make or clean, at the cost of larger downloads for big videos.
 
 **Needs your decision before Sprint 4:** none blocking.
+
+## Sprint 4 — Detail view & reuse
+
+**Goal:** open any card and get a page you can lift styles from. Everything copies in one click.
+**Stories:** 10 (expanded detail view), 13 (copy style guide / keywords / everything), 14 (swatches copy hex).
+
+### Planning
+
+| # | Task | Acceptance criteria |
+| --- | --- | --- |
+| 1 | Detail sheet and routing | Click opens a full-height sheet over the grid. Esc, backdrop and close button close it. Left/right arrows step through items in grid order. URL hash (`#/item/12`) restores it on refresh and works with Back. Focus is trapped while open and returned to the card on close |
+| 2 | Media panel | Images full size. Videos play with controls and can seek. A missing file shows a clear message |
+| 3 | Style guide rendering | Headings, lists, bold and inline code render. Raw text is HTML-escaped (it is AI output) |
+| 4 | Swatches | Show hex, role and name. Click or keyboard copies the hex, with visible confirmation |
+| 5 | Copy actions | Copy style guide, Copy keywords, Copy everything put the right text on the clipboard. Fallback if the clipboard API is refused |
+| 6 | Unanalysed items | Pending, analysing and failed items open too, with status, media and Retry, no guide |
+| 7 | Responsive and themes | Desktop two-column, phone stacked, dark and light |
+| 8 | Tests | Copy text, markdown rendering and escaping, route parsing, prev/next at the ends, detail and media routes over HTTP |
+| 9 | Manual check | Real analysed samples in the browser: image and video, each copy button read back from the clipboard, swatch copy, keyboard, light theme, phone width |
+
+### Review
+
+**Built**
+- Detail sheet: click any card (or its title) to open a full-height sheet over the grid. Media on the left, content on the right, stacked on a phone. Esc, the backdrop and the close button close it; the left and right arrows (and on-screen buttons) step through items in grid order and stop at the ends. Page scroll is locked while open, focus is kept inside, and focus returns to the card on close.
+- URL routing: `#/item/12` opens the sheet, survives a refresh, and works with Back and shared links. Cards are real links, so middle-click and keyboard activation work. An id that no longer exists shows a short message instead of a blank page.
+- Media: images at full size, videos with controls (poster is the thumbnail), seeking works through the range endpoint. A missing original shows a clear message.
+- Content: title, file path, tags, description, palette swatches (hex, role, name), keywords, and the style guide rendered as formatted text.
+- Copy: **Copy everything** (Markdown: title, tags, description, palette list, keywords, style guide), **Copy style guide** (the raw Markdown only), **Copy keywords** (comma list). Clicking a swatch copies its uppercase hex. Each gives a toast and the button or swatch briefly reads "Copied". If the browser refuses the clipboard API, a hidden-textarea fallback is used.
+- Unanalysed items open too: pending and analysing items show a note, failed items show the error and a Retry button.
+- Safe rendering: a small in-house Markdown renderer (`src/shared/markdown.ts`) escapes everything first, since the text comes from a model.
+- The sheet only ever shows or copies the record that matches the open item, never the previous one while the next loads.
+
+**Try it**
+```bash
+npm start
+```
+Click any analysed card, press **Copy everything**, and paste into another tool. Use ← / → to flip through, Esc to close.
+
+**Test results**
+- `npm test`: 87 of 87 pass (12 new): Markdown rendering and escaping (script and image injection, quotes, wrapped list items, Windows line endings), the three copy formats including hand-edited values and missing parts, route parsing, prev/next at both ends and for an unknown id, and over real HTTP: `GET /api/items/:id` (effective vs AI vs user values, 404) and `GET /media/:id` (full, 206 range, 416, 404 for an unknown id and for a file deleted from disk).
+- `npm run typecheck`, `npm run build`: clean.
+- Browser, on a copy of your real library (all 9 analysed): opened an image item and the video item at desktop width, and an image at phone width in the light theme. The style guide renders as headed sections with bullets. All four copy payloads were captured at the clipboard call and checked: Copy everything has all five parts in order, Copy style guide starts at `### Colour` and has no title or palette, Copy keywords is the comma list, a swatch copies `#F5A623`. ← and → moved 8 of 9 to 9 of 9 and the next button disabled at the end. The video played and seeked to 3 s. A page refresh on `#/item/5` restored the sheet. Esc closed it, unlocked scrolling and put focus back on that card's link.
+
+**Known issues**
+- The preview pane inside the desktop app denies clipboard permission, so there the async clipboard API threw and the textarea fallback ran, reporting success. I could not read the real clipboard back from that pane. The copied text is verified, and the fallback path is exercised, but I did not paste into another app or test in a normal browser window. Worth a quick paste on your side.
+- Closing the sheet adds a history entry (Back from the closed state reopens the item). Deliberate, to avoid trapping Back.
+- Only the inline hex codes inside the style guide text are plain text; they do not have swatches or click-to-copy.
+- Editing is Sprint 5, so the sheet is read-only for now.
+
+**Decisions and trade-offs**
+- Sheet over the grid, rather than a separate page, so scroll position and (Sprint 5) filters are kept.
+- Small in-house Markdown renderer rather than a library: the guide uses a fixed set of formatting, so no new dependency.
+- "Copy everything" is Markdown with the palette as a list (`- #0E0E10: background (Ink)`), so it pastes cleanly into a brief or another model.
+- Hex codes copy uppercase, as stored.
+- `.impeccable/config.json` is a new file in the repo. The design checker flagged an intentional `<img src=x onerror=...>` string in the escaping test as a broken image. I added a narrow ignore for that one test file only. You can delete the file if you would rather not keep it; the warning would come back.
+
+**Needs your decision before Sprint 5:** none blocking.
+
+### Follow-up tweaks (requested after review)
+
+**Asked for**
+1. Every tag and keyword copies its text on click.
+2. A new **Style prompt** section under the style guide: the whole style guide reformatted as a paste-ready instruction for Claude or any other agent, with a copy icon at the top right.
+3. Remove the copy buttons at the top; put a copy icon in each section instead.
+4. Make the style guide generic and universal, so it can become a whole design system, not just the elements visible in the image.
+
+**Done**
+- **Chips:** tags and keywords in the detail sheet are buttons. Click copies the text and shows a toast and a brief "Copied". Tags on the grid cards are still plain; Sprint 5 uses them as filters.
+- **Section copy icons:** Description, Palette (one `#HEX: role (name)` line per colour), Keywords, Style guide and Style prompt each have a copy icon at the top right of the section. The three top buttons are gone. A single small "copy everything" icon stays in the sheet's top bar (all sections as Markdown), because story 13 asks for an everything copy.
+- **Style prompt:** a new `stylePrompt` field in the analysis schema, written by the model as a standalone brief (starts "Use the following design system for everything you build in this project.", imperative rules with tokens, never mentions the reference, ends by telling the agent to extrapolate consistently). It is also in "Copy everything".
+- **Generic design system:** the prompt now asks for 13 fixed sections (Design principles, Colour, Typography, Layout & grid, Spacing & sizing, Shape borders & elevation, Components, Iconography, Imagery & illustration, Motion, Content & voice, Accessibility, Do and don't). It must generalise rather than describe the image, use tokens (hex, px, weights, durations, easing, radii, shadows), and cover a full component set (buttons, inputs, selects, switches, tabs, tables, modals, toasts, navigation, charts and so on) by extrapolation, marking anything not seen as "(inferred)". Palette roles gained success, warning, danger and info. The description field stays a literal description of the image (story 7).
+- **Re-analysing older items:** analyses record which prompt version made them (migration 3, existing ones are version 1, new ones version 2). The header shows "Update N older" (with a confirmation, since it uses your Claude plan), the sheet has a per-item "Re-analyse", and `npm run analyse -- --reanalyse` does it from a terminal. The old result stays until the new one lands, and hand edits are never touched. Nothing is re-analysed automatically.
+
+**Test results**
+- `npm test`: 102 of 102 pass (15 new): prompt asks for every section in order, for extrapolation and for a standalone prompt; schema requires `stylePrompt` and rejects a thin guide; per-section copy text; "Copy everything" ends with the style prompt; version tracking, requeue rules and hand edits kept; re-analyse routes over HTTP with a stubbed runner, including the missing-CLI refusal.
+- Real run on a copy of your library: re-analysed the weather image and the video with the real CLI. Both came back at version 2 with all 13 headings in order, about 9 to 10 k characters of style guide (was about 3 k), 19 to 21 "(inferred)" marks, 10 palette colours including semantic roles, and a 740 to 790 word style prompt. The components section covers buttons through toasts with sizes, states and hex values even though the image shows only some. The style prompt does not refer to the image; the only hits for words like "photo" or "frame" were genuine rules (for example "dark photo scrims", "32 outer frame").
+- Browser: five section icons present, top buttons gone. A real click on the style prompt icon gave "Copied style prompt" and the icon turned into a tick; a real click on a tag gave Copied "dark-mode". Captured payloads: tag text, keyword text, description, palette lines, keywords, style guide starting at `### Design principles`, style prompt starting at "Use the following design system…", and the everything copy with the five sections in order.
+
+**Things to know**
+- **Time and usage:** a fuller analysis is slower and longer. About 56 s for the image and 62 s for the video, against about 25 s before. Re-analysing all 9 items at 2 in parallel is roughly 5 minutes of your Claude plan. That is why "Update N older" asks first.
+- **Style may carry the source's subject:** because it is derived from one reference, the prompt can keep domain flavour (the weather sample's prompt talks about "rain blue" and "heat orange" as colour meanings). It is generic in structure and covers unseen components, but it is still your reference's language.
+- **Programmatic clicks:** in the preview pane, a script-made click cannot copy (no user gesture); real clicks work. Not an app issue.
+- Only 2 of your 9 items were re-analysed, and only in my scratch copy. Your real library still shows "Update 9 older" until you choose to run it.

@@ -3,7 +3,15 @@
   "title": "TasteAnalysis",
   "type": "object",
   "additionalProperties": false,
-  "required": ["title", "description", "styleGuide", "palette", "keywords", "tags"],
+  "required": [
+    "title",
+    "description",
+    "styleGuide",
+    "stylePrompt",
+    "palette",
+    "keywords",
+    "tags"
+  ],
   "properties": {
     "title": {
       "type": "string",
@@ -18,24 +26,50 @@
     },
     "styleGuide": {
       "type": "string",
-      "minLength": 200,
-      "description": "Markdown style guide with the sections Colour, Typography, Layout & grid, Spacing, Components & patterns, Iconography, Imagery, Texture & depth, Mood."
+      "minLength": 1200,
+      "description": "Markdown design system with the sections Design principles, Colour, Typography, Layout & grid, Spacing & sizing, Shape borders & elevation, Components, Iconography, Imagery & illustration, Motion, Content & voice, Accessibility, Do and don't. Generic and extrapolated, not a description of one image."
+    },
+    "stylePrompt": {
+      "type": "string",
+      "minLength": 400,
+      "description": "Self-contained instruction block for an AI agent to build in this style in a new project. Never mentions the reference image."
     },
     "palette": {
       "type": "array",
       "minItems": 2,
-      "maxItems": 10,
+      "maxItems": 12,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["hex", "role"],
+        "required": [
+          "hex",
+          "role"
+        ],
         "properties": {
-          "hex": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+          "hex": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          },
           "role": {
             "type": "string",
-            "enum": ["primary", "secondary", "accent", "background", "surface", "text", "muted", "border"]
+            "enum": [
+              "primary",
+              "secondary",
+              "accent",
+              "background",
+              "surface",
+              "text",
+              "muted",
+              "border",
+              "success",
+              "warning",
+              "danger",
+              "info"
+            ]
           },
-          "name": { "type": "string" }
+          "name": {
+            "type": "string"
+          }
         }
       }
     },
@@ -43,14 +77,20 @@
       "type": "array",
       "minItems": 5,
       "maxItems": 20,
-      "items": { "type": "string", "minLength": 2 },
+      "items": {
+        "type": "string",
+        "minLength": 2
+      },
       "description": "Reusable style and theme terms for briefing other design work."
     },
     "tags": {
       "type": "array",
       "minItems": 2,
       "maxItems": 6,
-      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
       "description": "Short kebab-case labels. Reuse existing tags where they fit."
     }
   }
