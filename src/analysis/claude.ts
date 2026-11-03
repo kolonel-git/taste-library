@@ -65,6 +65,9 @@ export function parseClaudeOutput(stdout: string): unknown {
   }
   if (envelope?.is_error) {
     const msg = typeof envelope.result === 'string' && envelope.result ? envelope.result : envelope.subtype ?? 'unknown error';
+    if (/authenticat|oauth|not logged in|please run \/?login|invalid api key|sign in/i.test(String(msg))) {
+      throw new Error('Claude Code is not signed in (its login expired). Open a terminal, run "claude auth login", then press Retry.');
+    }
     throw new Error(`Claude Code reported an error: ${String(msg).slice(0, 300)}`);
   }
   if (envelope?.structured_output && typeof envelope.structured_output === 'object') return envelope.structured_output;

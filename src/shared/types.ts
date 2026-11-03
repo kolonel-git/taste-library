@@ -9,7 +9,11 @@ export type PaletteRole =
   | 'surface'
   | 'text'
   | 'muted'
-  | 'border';
+  | 'border'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info';
 
 export interface PaletteColor {
   hex: string;
@@ -22,6 +26,8 @@ export interface Analysis {
   title: string;
   description: string;
   styleGuide: string;
+  /** Paste-ready instruction block for an AI agent to use this style in a new project. */
+  stylePrompt: string;
   palette: PaletteColor[];
   keywords: string[];
   tags: string[];
@@ -75,11 +81,15 @@ export interface StatusView {
   counts: Record<ItemStatus, number>;
   /** Pending images that "Analyse pending" would send now. */
   analysable: number;
+  /** Analysed items made with an older prompt; "Re-analyse" would improve them. */
+  outdated: number;
   analysis: AnalysisProgress;
 }
 
 /** Full record for one item (detail view). */
 export interface ItemDetail extends ItemView {
+  /** True when the analysis came from an older prompt than the current one. */
+  outdated: boolean;
   effective: Partial<Analysis>;
   ai: Partial<Analysis>;
   user: Partial<Analysis>;

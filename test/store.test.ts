@@ -19,7 +19,7 @@ const fresh = () => new Store(openDb(':memory:'));
 test('migration sets schema version and tables exist', () => {
   const s = fresh();
   const v = s.db.prepare('PRAGMA user_version').get() as { user_version: number };
-  assert.equal(v.user_version, 2);
+  assert.equal(v.user_version, 3);
   const names = (s.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map((r) => r.name);
   for (const t of ['items', 'tags', 'item_tags']) assert.ok(names.includes(t), t);
 });

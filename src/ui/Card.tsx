@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import type { ItemView } from '../shared/types.ts';
+import { routeFor } from '../shared/route.ts';
 
 function stem(relPath: string): string {
   const name = relPath.split('/').pop() ?? relPath;
@@ -26,7 +27,7 @@ export function Card({ item, onRetry }: { item: ItemView; onRetry: (id: number) 
   const label = STATUS_LABEL[item.status];
 
   return (
-    <article class="card">
+    <article class="card" data-item={item.id}>
       <div
         class="media"
         style={{ aspectRatio: ratio }}
@@ -39,8 +40,9 @@ export function Card({ item, onRetry }: { item: ItemView; onRetry: (id: number) 
         {broken ? (
           <div class="media-fallback">{stem(item.relPath)}</div>
         ) : (
-          <img src={item.thumbUrl} alt={item.title ?? stem(item.relPath)} loading="lazy" onError={() => setBroken(true)} />
+          <img src={item.thumbUrl} alt="" loading="lazy" onError={() => setBroken(true)} />
         )}
+        <a class="cover" href={routeFor(item.id)} aria-label={`Open ${item.title ?? stem(item.relPath)}`} />
         {hover && !noPreview && (
           <video
             class={playing ? 'preview on' : 'preview'}
@@ -72,7 +74,9 @@ export function Card({ item, onRetry }: { item: ItemView; onRetry: (id: number) 
         )}
       </div>
       <div class="meta">
-        <h2 class={item.title ? 'title' : 'title untitled'}>{item.title ?? stem(item.relPath)}</h2>
+        <h2 class={item.title ? 'title' : 'title untitled'}>
+          <a href={routeFor(item.id)}>{item.title ?? stem(item.relPath)}</a>
+        </h2>
         {item.tags.length > 0 && (
           <ul class="tags">
             {item.tags.slice(0, 4).map((t) => (

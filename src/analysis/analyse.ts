@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { ItemRow, Store } from '../server/db.ts';
 import { extractKeyframes, type KeyframeMode } from './keyframes.ts';
 import { execClaude, OutputError, parseClaudeOutput, type ClaudeExec } from './claude.ts';
-import { analysisSchemaText, buildPrompt } from './prompt.ts';
+import { ANALYSIS_VERSION, analysisSchemaText, buildPrompt } from './prompt.ts';
 import { resolveTags } from './tags.ts';
 import { validateAnalysis } from './validate.ts';
 
@@ -97,7 +97,7 @@ export async function analyseClaimed(deps: AnalyseDeps, row: ItemRow): Promise<'
 
       const analysis = checked.value;
       const tags = resolveTags(vocabulary, analysis.tags);
-      if (!store.saveAnalysis(row.id, row.content_hash, { ...analysis, tags }, tags)) {
+      if (!store.saveAnalysis(row.id, row.content_hash, { ...analysis, tags }, tags, ANALYSIS_VERSION)) {
         deps.log?.(`dropped stale result for ${row.rel_path} (file changed or removed meanwhile)`);
         return 'dropped';
       }

@@ -16,6 +16,7 @@ export interface ItemRow {
   ai_json: string | null;
   user_json: string | null;
   analysed_hash: string | null;
+  analysis_version: number;
   added_at: string;
   updated_at: string;
   analysed_at: string | null;
@@ -68,6 +69,8 @@ const MIGRATIONS: string[] = [
   CREATE INDEX item_tags_tag ON item_tags(tag_id);
   `,
   `ALTER TABLE items ADD COLUMN claimed_at TEXT;`,
+  // Which prompt/schema version produced ai_json. Existing analyses are version 1.
+  `ALTER TABLE items ADD COLUMN analysis_version INTEGER NOT NULL DEFAULT 1;`,
 ];
 
 export function openDb(file: string): DatabaseSync {
@@ -201,15 +204,15 @@ export class Store {
    * Store an analysis. Only lands if the item is still being analysed for the same
    * file contents; otherwise the result is stale and dropped. Replaces AI tag links only.
    */
-  saveAnalysis(id: number, contentHash: string, ai: unknown, tagNames: string[]): boolean {
+  saveAnalysis(id: number, contentHash: string, ai: unknown, tagNames: string[], version = 1): boolean {
     return this.transaction(() => {
       const t = now();
       const res = this.db
         .prepare(
           `UPDATE items SET ai_json = ?, status = 'analysed', error = NULL, analysed_hash = ?, analysed_at = ?,
-             claimed_at = NULL, updated_at = ? WHERE id = ? AND content_hash = ? AND status = 'analysing'`,
+             analysis_version = ?, claimed_at = NULL, updated_at = ? WHERE id = ? AND content_hash = ? AND status = 'analysing'`,
         )
-        .run(JSON.stringify(ai), contentHash, t, t, id, contentHash);
+        .run(JSON.stringify(ai), contentHash, t, version, t, id, contentHash);
       if (Number(res.changes) === 0) return false;
       this.db.prepare("DELETE FROM item_tags WHERE item_id = ? AND source = 'ai'").run(id);
       for (const name of tagNames) {
@@ -230,6 +233,29 @@ export class Store {
       )
       .run(message.slice(0, 400), now(), id, contentHash);
     return Number(res.changes) > 0;
+  }
+
+  /** Analysed items made with an older prompt/schema than `version`. */
+  countOutdated(version: number): number {
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS n FROM items WHERE status = 'analysed' AND analysis_version < ?")
+      .get(version) as unknown as { n: number };
+    return row.n;
+  }
+
+  /**
+   * Queue analysed items for a fresh analysis. With no id: every item older than `version`.
+   * With an id: that one item, whatever its version. The old result stays until the new one lands,
+   * and hand edits are never touched.
+   */
+  requeue(version: number, id?: number): number {
+    const res =
+      id === undefined
+        ? this.db
+            .prepare("UPDATE items SET status = 'pending', error = NULL, updated_at = ? WHERE status = 'analysed' AND analysis_version < ?")
+            .run(now(), version)
+        : this.db.prepare("UPDATE items SET status = 'pending', error = NULL, updated_at = ? WHERE status = 'analysed' AND id = ?").run(now(), id);
+    return Number(res.changes);
   }
 
   /** failed -> pending so the next run picks it up again. */

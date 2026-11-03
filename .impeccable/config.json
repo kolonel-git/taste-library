@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "test/detail.test.ts"
+        ],
+        "createdAt": "2026-11-02T05:11:17.246Z",
+        "reason": "false positive: deliberate <img src=x onerror> string in an HTML-escaping security test, not rendered UI"
+      }
+    ]
+  }
+}
