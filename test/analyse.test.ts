@@ -167,13 +167,11 @@ test('file changed while analysing: the stale result is dropped, item stays pend
   assert.equal(item.analysed_hash, 'new-hash');
 });
 
-test('re-analysis keeps hand edits and user tags, replaces AI output and AI tags', async () => {
+test('re-analysis keeps hand edits and an edited tag list, replaces AI output and AI tags', async () => {
   const { source, dataDir, store } = setup();
   await analysePending({ store, sourceFolder: source, dataDir, exec: stubExec(() => envelope(goodAnalysis())) });
   const id = row(store, 'a.png').id;
-  store.setUserJson(id, { title: 'Mine' });
-  store.db.prepare("INSERT INTO tags (name) VALUES ('mine')").run();
-  store.db.prepare("INSERT INTO item_tags (item_id, tag_id, source) SELECT ?, id, 'user' FROM tags WHERE name = 'mine'").run(id);
+  store.applyEdits(id, { title: 'Mine', tags: ['mine'] });
 
   store.markChanged(id, { relPath: 'a.png', kind: 'image', size: 5, mtimeMs: 3, contentHash: 'h2', width: 1, height: 1, durationS: null });
   const second = goodAnalysis({ title: 'Second Opinion', tags: ['poster', 'bold'] });
@@ -181,10 +179,12 @@ test('re-analysis keeps hand edits and user tags, replaces AI output and AI tags
 
   const item = row(store, 'a.png');
   assert.equal(JSON.parse(item.ai_json!).title, 'Second Opinion');
-  assert.equal(item.user_json, '{"title":"Mine"}');
-  assert.deepEqual(store.tagsFor(id), ['bold', 'mine', 'poster']);
-  // tags nobody uses any more are pruned from the vocabulary
-  assert.deepEqual(store.tagVocabulary().sort(), ['bold', 'mine', 'poster']);
+  assert.deepEqual(JSON.parse(item.user_json!), { title: 'Mine', tags: ['mine'] });
+  assert.deepEqual(store.tagsFor(id), ['mine']); // your tag list is yours; the AI's new tags wait in ai_json
+  assert.deepEqual(store.tagVocabulary(), ['mine']);
+
+  store.applyEdits(id, { tags: null });
+  assert.deepEqual(store.tagsFor(id), ['bold', 'poster']); // reverting shows the new AI tags
 });
 
 test('stale claims from a crashed run are released', async () => {

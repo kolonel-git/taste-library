@@ -11,6 +11,12 @@ export const api = {
   status: () => request<StatusView>('/api/status'),
   items: () => request<ItemView[]>('/api/items'),
   item: (id: number) => request<ItemDetail>(`/api/items/${id}`),
+  edit: (id: number, patch: Record<string, string | string[] | null>) =>
+    request<ItemDetail>(`/api/items/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    }),
   rescan: () => request<{ started: boolean }>('/api/rescan', { method: 'POST' }),
   analyse: () => request<{ started: boolean }>('/api/analyse', { method: 'POST' }),
   reanalyse: (id: number) => request<{ started: boolean }>(`/api/items/${id}/reanalyse`, { method: 'POST' }),

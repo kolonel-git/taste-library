@@ -18,7 +18,7 @@ const STATUS_LABEL: Record<string, string> = {
   failed: 'Analysis failed',
 };
 
-export function Card({ item, onRetry }: { item: ItemView; onRetry: (id: number) => void }) {
+export function Card({ item, activeTags, onTag, onRetry }: { item: ItemView; activeTags: string[]; onTag: (tag: string) => void; onRetry: (id: number) => void }) {
   const [broken, setBroken] = useState(false);
   const [hover, setHover] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -78,9 +78,13 @@ export function Card({ item, onRetry }: { item: ItemView; onRetry: (id: number) 
           <a href={routeFor(item.id)}>{item.title ?? stem(item.relPath)}</a>
         </h2>
         {item.tags.length > 0 && (
-          <ul class="tags">
+          <ul class="tags clickable">
             {item.tags.slice(0, 4).map((t) => (
-              <li key={t}>{t}</li>
+              <li key={t}>
+                <button class={activeTags.includes(t) ? 'chip-btn on' : 'chip-btn'} aria-pressed={activeTags.includes(t)} title={`Filter by ${t}`} onClick={() => onTag(t)}>
+                  {t}
+                </button>
+              </li>
             ))}
           </ul>
         )}

@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { ANALYSIS_VERSION, buildPrompt } from '../src/analysis/prompt.ts';
 import { validateAnalysis } from '../src/analysis/validate.ts';
 import { analysePending } from '../src/analysis/analyse.ts';
-import { descriptionText, everythingText, paletteText, stylePromptText } from '../src/shared/copytext.ts';
+import { descriptionText, everythingText, paletteText, styleGuideText } from '../src/shared/copytext.ts';
 import { openDb, Store, type NewItem } from '../src/server/db.ts';
 import { createApp } from '../src/server/app.ts';
 import { ensureDataDirs, saveConfig } from '../src/server/config.ts';
@@ -28,7 +28,7 @@ const HEADINGS = [
   "Do and don't",
 ];
 
-// --- prompt asks for a generic design system and a standalone prompt ---
+// --- prompt asks for one generic, paste-ready design system ---
 
 test('prompt asks for every design-system section, in order, and for extrapolation', () => {
   const p = buildPrompt({ kind: 'image', files: ['/x/a.png'], tags: [] });
@@ -44,12 +44,13 @@ test('prompt asks for every design-system section, in order, and for extrapolati
   assert.match(p, /Do not describe "the weather card"/);
 });
 
-test('prompt asks for a self-contained style prompt that never mentions the image', () => {
+test('the guide must be paste-ready, stand alone and never mention the image; there is no separate prompt', () => {
   const p = buildPrompt({ kind: 'image', files: ['/x/a.png'], tags: [] });
-  assert.match(p, /\*\*stylePrompt\*\*/);
+  assert.match(p, /paste-ready for an AI design or coding agent/);
   assert.match(p, /Use the following design system for everything you build in this project\./);
-  assert.match(p, /never mention the reference image/);
+  assert.match(p, /Never mention the reference image/);
   assert.match(p, /extrapolate from the principles/);
+  assert.doesNotMatch(p, /stylePrompt/);
 });
 
 test('a video prompt keeps the motion instruction', () => {
@@ -60,16 +61,12 @@ test('a video prompt keeps the motion instruction', () => {
 
 // --- schema ---
 
-test('stylePrompt is required and is tidied', () => {
-  const missing: any = goodAnalysis();
-  delete missing.stylePrompt;
-  const r = validateAnalysis(missing);
+test('there is no style prompt field any more: old-style output with one is refused, new output is fine', () => {
+  assert.ok(validateAnalysis(goodAnalysis()).ok);
+  const withExtra: any = { ...goodAnalysis(), stylePrompt: 'x'.repeat(500) };
+  const r = validateAnalysis(withExtra);
   assert.equal(r.ok, false);
-  if (!r.ok) assert.match(r.error, /stylePrompt/);
-
-  const ok = validateAnalysis(goodAnalysis({ stylePrompt: `  ${goodAnalysis().stylePrompt}\n\n` }));
-  assert.ok(ok.ok);
-  if (ok.ok) assert.equal(ok.value.stylePrompt, goodAnalysis().stylePrompt);
+  if (!r.ok) assert.match(r.error, /additional properties/);
 });
 
 test('semantic palette roles are accepted; a thin style guide is not', () => {
@@ -77,7 +74,6 @@ test('semantic palette roles are accepted; a thin style guide is not', () => {
   const r = validateAnalysis(goodAnalysis({ palette: [...goodAnalysis().palette, ...(roles as any)] }));
   assert.ok(r.ok);
   assert.equal(validateAnalysis(goodAnalysis({ styleGuide: '### Colour\nblue' })).ok, false);
-  assert.equal(validateAnalysis(goodAnalysis({ stylePrompt: 'Use blue.' })).ok, false);
 });
 
 // --- copy text per section ---
@@ -87,14 +83,16 @@ const copyable = () => ({ title: 'T', tags: ['a', 'b'], effective: goodAnalysis(
 test('each section has its own copy text', () => {
   assert.equal(descriptionText(copyable()), goodAnalysis().description);
   assert.equal(paletteText(copyable()), '#0E0E10: background\n#17171A: surface (Ink)\n#E6C07B: accent');
-  assert.equal(stylePromptText(copyable()), goodAnalysis().stylePrompt);
+  assert.equal(styleGuideText(copyable()), goodAnalysis().styleGuide.trim());
   assert.equal(paletteText({ ...copyable(), effective: {} }), '');
 });
 
-test('copy everything now ends with the style prompt', () => {
+test('copy everything ends with the style guide', () => {
   const text = everythingText(copyable());
-  assert.ok(text.indexOf('## Style guide') < text.indexOf('## Style prompt'));
-  assert.match(text, /## Style prompt\n\nUse the following design system/);
+  assert.ok(text.indexOf('## Palette') < text.indexOf('## Keywords'));
+  assert.ok(text.indexOf('## Keywords') < text.indexOf('## Style guide'));
+  assert.doesNotMatch(text, /Style prompt/);
+  assert.ok(text.trimEnd().endsWith(goodAnalysis().styleGuide.trim()));
 });
 
 // --- store: versions and requeue ---
@@ -145,7 +143,7 @@ test('migration keeps existing analyses at version 1', () => {
 
 // --- analyser records the version and stores the prompt ---
 
-test('a fresh analysis stores the current version and the style prompt', async () => {
+test('a fresh analysis stores the current version and the paste-ready guide', async () => {
   const source = tmpDir('src-');
   const dataDir = tmpDir('data-');
   ensureDataDirs(dataDir);
@@ -155,7 +153,8 @@ test('a fresh analysis stores the current version and the style prompt', async (
   await analysePending({ store, sourceFolder: source, dataDir, exec: stubExec(() => envelope(goodAnalysis())) });
   const row = store.getByPath('a.png')!;
   assert.equal(row.analysis_version, ANALYSIS_VERSION);
-  assert.match(JSON.parse(row.ai_json!).stylePrompt, /^Use the following design system/);
+  assert.match(JSON.parse(row.ai_json!).styleGuide, /^Use the following design system/);
+  assert.equal(JSON.parse(row.ai_json!).stylePrompt, undefined);
 });
 
 // --- HTTP: re-analyse routes ---
@@ -243,18 +242,17 @@ test('POST /api/items/:id/reanalyse redoes one analysed item; refuses others and
   }, false);
 });
 
-// --- shorter description, Markdown style prompt ---
+// --- shorter description ---
 
-test('prompt asks for a 200 to 300 word plain-prose description and a Markdown style prompt', () => {
+test('prompt asks for a 150 to 200 word plain-prose description', () => {
   const p = buildPrompt({ kind: 'image', files: ['/x/a.png'], tags: [] });
-  assert.match(p, /Write 200 to 300 words \(never more than 300\)/);
+  assert.match(p, /Write 150 to 200 words \(never more than 200\)/);
   assert.match(p, /plain prose, no lists/);
-  assert.match(p, /Format it as Markdown: short `##` headings/);
 });
 
 test('an over-long description is rejected, a normal one passes', () => {
-  assert.equal(validateAnalysis(goodAnalysis({ description: 'word '.repeat(600) })).ok, false);
-  assert.ok(validateAnalysis(goodAnalysis({ description: 'word '.repeat(280).trim() })).ok);
+  assert.equal(validateAnalysis(goodAnalysis({ description: 'word '.repeat(450) })).ok, false); // ~2,250 characters
+  assert.ok(validateAnalysis(goodAnalysis({ description: 'word '.repeat(190).trim() })).ok);
 });
 
 // --- retry all failed, and a failed re-analysis keeps the earlier result ---

@@ -7,7 +7,6 @@
     "title",
     "description",
     "styleGuide",
-    "stylePrompt",
     "palette",
     "keywords",
     "tags"
@@ -22,18 +21,13 @@
     "description": {
       "type": "string",
       "minLength": 80,
-      "description": "Plain-prose description of what the image contains, 200 to 300 words.",
-      "maxLength": 2600
+      "description": "Plain-prose description of what the image contains, 150 to 200 words.",
+      "maxLength": 2000
     },
     "styleGuide": {
       "type": "string",
       "minLength": 1200,
-      "description": "Markdown design system with the sections Design principles, Colour, Typography, Layout & grid, Spacing & sizing, Shape borders & elevation, Components, Iconography, Imagery & illustration, Motion, Content & voice, Accessibility, Do and don't. Generic and extrapolated, not a description of one image."
-    },
-    "stylePrompt": {
-      "type": "string",
-      "minLength": 400,
-      "description": "Self-contained instruction block for an AI agent to build in this style in a new project. Never mentions the reference image."
+      "description": "Markdown design system, paste-ready for an AI agent: an opening instruction line, the sections Design principles, Colour, Typography, Layout & grid, Spacing & sizing, Shape borders & elevation, Components, Iconography, Imagery & illustration, Motion, Content & voice, Accessibility, Do and don't, and a closing extrapolation line. Generic and extrapolated, not a description of one image."
     },
     "palette": {
       "type": "array",

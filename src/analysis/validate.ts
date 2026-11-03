@@ -42,7 +42,6 @@ export function validateAnalysis(input: unknown): Validated {
       title: raw.title.trim(),
       description: raw.description.trim(),
       styleGuide: raw.styleGuide.trim(),
-      stylePrompt: raw.stylePrompt.trim(),
       palette: raw.palette.map((c) => ({ ...c, hex: c.hex.toUpperCase() })),
       keywords,
       tags: raw.tags,

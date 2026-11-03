@@ -276,3 +276,80 @@ Click any analysed card, press **Copy everything**, and paste into another tool.
 **Known issues**
 - Your real library copy showed 8 failed and 1 analysed. That is the expired Claude Code login (see below), not data loss: the earlier results are still stored and the sheet shows them again after this change. Sign in with `claude auth login`, then press **Retry 8 failed**.
 - The preview pane in the desktop app reports a zero-width window until it is resized, which tripped the phone breakpoint during testing; in a normal browser window the layout is as described.
+
+## Sprint 5 — Curate and polish
+
+**Goal:** the library is yours to curate. Filter by tags, edit any field, and edits are never overwritten.
+**Stories:** 11 (filter by one or more tags), 12 (edit title, tags, description, style guide, keywords; saved locally; never overwritten by a later analysis), plus story 9 polish and the final end-to-end check.
+
+### Planning
+
+| # | Task | Acceptance criteria |
+| --- | --- | --- |
+| 1 | Filter and sort logic | Tag counts, match-all filtering, sort (Newest, A to Z, Recently analysed) as pure, tested functions. Filter lives in the URL (`?tags=a,b`) and survives a refresh |
+| 2 | Filter bar, grid wiring | Select, deselect and clear tags. "N of M" count and a clear empty state. Grid-card tags toggle filters. Sheet arrows follow the filtered list |
+| 3 | Edit validation and `PATCH /api/items/:id` | Only title, tags, description, keywords, style guide and style prompt are editable. Types and sizes are checked, tags normalised onto the existing vocabulary. A value saves it; `null` reverts to the AI version. Bad input gets a clear 400 |
+| 4 | Edits are never overwritten | Re-analysis replaces AI output only. An edited field, and an edited tag list, stay exactly as set. Tag tables stay in sync and orphan tags are pruned |
+| 5 | Edit UI in the sheet | Pencil per field, Save / Cancel (Ctrl+Enter saves, Esc cancels), tag and keyword chip editors with autocomplete for tags, "Edited" marker with Revert to AI, guard against losing unsaved text |
+| 6 | Polish | Loading skeletons, empty and error states, keyboard and focus pass, visual pass at desktop and phone width, dark and light |
+| 7 | Tests | Filter and sort logic, tag normalisation on edit, PATCH validation, revert, edits surviving re-analysis, tag sync |
+| 8 | End-to-end | All 14 stories walked through with real samples and the video, plus a clean-install run (`npm ci`, test, build) from a copy of the project |
+
+### Review
+
+**Built**
+- **Filter by tags (story 11):** a bar under the header lists every tag with its count (most used first; first 14 shown, "Show all" for the rest). Select one or more tags to see only items that carry all of them. Tags on grid cards toggle the same filter. "N of M" tally, **Clear filter**, and a clear empty state ("No item has all of these tags…"). The selection lives in the URL (`?tags=a,b`, other parameters kept), so refresh and bookmarks keep it. The sheet's arrows and "2 of 3" counter follow the filtered list.
+- **Sort:** Newest first (default), A to Z (case- and number-aware: "Item 9" before "Item 10"), Recently analysed. The choice is remembered.
+- **Edit (story 12):** a pencil on the title, tags, description, keywords, and the open style document (guide or prompt). One editor at a time; Enter saves a title, Ctrl+Enter saves long text, Esc cancels, Save and Cancel buttons. Tags and keywords use a chip editor (Enter or comma adds, Backspace removes, Enter on an empty box saves; tags autocomplete from the library vocabulary and are tidied to kebab-case). Fields you changed show **Edited** and **Revert to AI** (**Remove edit** if there is no AI version). Unsaved text is protected: closing, stepping to another item, or switching document asks first. Unanalysed items can be named and tagged too.
+- **Edits are never overwritten:** `PATCH /api/items/:id` validates and stores edits apart from the AI result (`user_json`). A re-analysis replaces only the AI side, and an edited tag list is left alone (reverting tags shows the newest AI tags). Tag tables stay in sync and unused tags are pruned.
+- **Polish (story 9):** shimmering placeholder cards while the library loads and a clear message if the server cannot be reached, a loading skeleton in the sheet, a "no matches" state, keyboard support throughout (chips and filters are real buttons with pressed states, Esc cancels an edit before it closes the sheet), tab trapping includes the editors.
+- Extra API: items now carry `analysedAt` (for the sort).
+
+**Try it**
+```bash
+npm start
+```
+Click tags in the bar to filter. Open any card, press a pencil, change something, Save. Press **Re-analyse** (or **Update N older**) and watch your edit survive.
+
+**Test results**
+- `npm test`: 126 of 126 pass (18 new): tag counts and match-all filtering, URL round-trip, sort rules, edit validation (every field, limits, normalisation onto the vocabulary), store edits and revert, tag sync and pruning, edits surviving re-analysis, and PATCH over HTTP (success, 400 messages, 404, malformed JSON, cross-origin refusal). One Sprint 2 test was updated to the new "an edited tag list is yours" rule.
+- Typecheck and build clean. **Clean-install check:** copied the project without `node_modules`, `.git`, `dist` or samples to a temp folder, ran `npm ci`, typecheck, tests (126 of 126) and build, then started the server from that copy: UI served, ffmpeg and Claude Code detected, first-run state shown.
+- **Real end-to-end** on a copy of your library with the real CLI (your login works again):
+  - Story 1 and 2: copied a new image into the source folder, pressed Rescan, got a pending card.
+  - Story 5 and 7: Analyse pending ran the real CLI (50 s): "Earthly Pollen Atlas", tags reused from the library vocabulary.
+  - Story 4: edited its title, changed the file's bytes, rescan: back to pending, title "My Atlas" kept, earlier AI result kept until the new one lands.
+  - Story 3: deleted the file, rescan: item and its thumbnails gone.
+  - Story 11: selecting dark-mode then dashboard gave "3 of 9", URL `?tags=dark-mode,dashboard`, survived a reload; the sheet counter read "1 of 3", "2 of 3"; a nonexistent tag showed the empty state with the chip still clearable; A to Z order verified.
+  - Story 12: edited title (grid, sheet and API all show it), tags ("Fresh Tag" became `fresh-tag`, "Dashboards" folded into the existing `dashboard`, the new tag appeared in the filter bar with a count), and description (Ctrl+Enter). The unsaved-changes guard asked before Next and kept my text when I declined. Then a real re-analysis of that edited item: the AI title, description (276 words, inside the 200 to 300 target) and style prompt all changed, while my title, my five tags and my description were identical afterwards. Revert to AI on the description restored the AI text and left the other two edits.
+  - Stories 8 to 10, 13 and 14 were verified in Sprints 3 and 4 and re-checked here (video card, detail sheet, copy buttons, swatches, six per row).
+
+**Known issues**
+- The "Retry 7 failed" button in your real library is still showing from before you signed in again; press it and those 7 re-run (about 8 minutes at 2 in parallel). They still show their earlier results in the meantime.
+- Editing the palette is not supported (not in the story list). Palette colours always show the AI's.
+- Tags are replaced as a whole when you edit them: after editing, new AI tags from a later analysis do not merge in until you revert. That is the "your edit wins" rule applied to tags.
+- Native browser autocomplete (`datalist`) is used for tag suggestions, so its look follows the browser.
+- Not covered by automated tests: the React/Preact components themselves (no browser test runner in the project). The logic is tested and the UI was exercised by hand in a real browser, as listed above.
+- Still no free-text search, cloud sync, sharing or mobile app (out of scope for v1), and no live folder watching: Rescan or relaunch picks up changes.
+
+**Decisions and trade-offs**
+- Editing tags replaces the AI list wholesale (field-level "your edit wins"), the simplest rule that can never be overwritten by accident.
+- Filter matches **all** selected tags (as in the roadmap).
+- Per-field Save and Cancel rather than autosave, so a half-typed style guide is never stored.
+- Filter and sort run in the browser over the full list. Fine at personal-library sizes; the API already returns everything in one request.
+- `datalist` and small hand-written components rather than a UI library, to keep dependencies at one runtime package (`preact`) plus `ajv`.
+
+**v1 status:** all 14 user stories are built, tested and checked against real samples including a video. Roadmap deliverables for Sprints 1 to 5 are done.
+
+### Tidy-up after Sprint 5
+
+**Asked for:** remove the extra border around each tag in the filter bar; drop one of style guide or style prompt, since they show the same thing; cut descriptions to 150 to 200 words.
+
+**Done**
+- **Filter-bar tags:** each tag sat inside a bordered list item as well as having its own border. The extra border and padding on the list item are gone; each tag now has a single outline.
+- **One style document:** I kept the **style guide** and dropped the **style prompt**. The guide is the complete design system, so nothing is lost, and removing the second document means shorter analyses and a simpler Style section (heading "Style guide", with just Preview and Raw). To keep the one thing the prompt did, the guide now opens with "Use the following design system for everything you build in this project." and ends with the "where this is silent, extrapolate" line, and must not mention the reference image, so it pastes straight into a new project. The schema, prompt, copy text, edit rules and tests no longer have a style prompt. "Copy everything" is now description, palette, keywords and style guide.
+- **Description:** the prompt asks for 150 to 200 words in one or two plain paragraphs (schema allows up to 2,000 characters so a slightly long answer is not thrown away).
+- **Prompt version 3:** because the prompt changed, your 9 existing analyses now show **Update 9 older** in the header. Nothing is re-run on its own. Until you re-analyse them (all at once with that button, or one at a time with **Re-analyse** in the sheet) they keep their old, longer descriptions and the old separate prompt is simply no longer shown. Your edits are kept either way.
+
+**Test results:** 126 of 126 pass, typecheck and build clean. Real check on a copy of your library: re-analysed the weather item with the real CLI (55 s). Result: description 194 words in one paragraph, guide opens with the instruction line and ends with the extrapolation line, 13 sections, 11 k characters, no style prompt field, no mention of the image. In the browser the sheet shows Description, Palette, Keywords and Style guide (Preview or Raw), the filter chips measure a single 1 px outline with the list item at 0, and the old items show the "analysed with an earlier version" note.
+
+**Known issues:** none new. The previous review's note about the 7 failed retries no longer applies; they are all analysed in your library.

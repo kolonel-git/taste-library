@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { ItemKind, ItemStatus } from '../shared/types.ts';
+import { normaliseTag } from '../analysis/tags.ts';
 
 export interface ItemRow {
   id: number;
@@ -92,6 +93,15 @@ export function openDb(file: string): DatabaseSync {
 }
 
 const now = () => new Date().toISOString();
+
+function userHasTags(userJson: string | null): boolean {
+  if (!userJson) return false;
+  try {
+    return Array.isArray((JSON.parse(userJson) as { tags?: unknown }).tags);
+  } catch {
+    return false;
+  }
+}
 
 export class Store {
   readonly db: DatabaseSync;
@@ -214,14 +224,50 @@ export class Store {
         )
         .run(JSON.stringify(ai), contentHash, t, version, t, id, contentHash);
       if (Number(res.changes) === 0) return false;
-      this.db.prepare("DELETE FROM item_tags WHERE item_id = ? AND source = 'ai'").run(id);
-      for (const name of tagNames) {
-        this.db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)').run(name);
-        const tag = this.db.prepare('SELECT id FROM tags WHERE name = ?').get(name) as unknown as { id: number };
-        this.db.prepare("INSERT OR IGNORE INTO item_tags (item_id, tag_id, source) VALUES (?, ?, 'ai')").run(id, tag.id);
-      }
-      this.db.prepare('DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM item_tags)').run();
+      // A hand-edited tag list is the user's, so a new analysis must not touch it.
+      const row = this.db.prepare('SELECT user_json FROM items WHERE id = ?').get(id) as unknown as { user_json: string | null };
+      if (!userHasTags(row.user_json)) this.replaceTags(id, tagNames, 'ai');
       return true;
+    });
+  }
+
+  /** Replace every tag link of an item, then drop tags nobody uses any more. */
+  private replaceTags(id: number, names: string[], source: 'ai' | 'user'): void {
+    this.db.prepare('DELETE FROM item_tags WHERE item_id = ?').run(id);
+    for (const name of names) {
+      this.db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)').run(name);
+      const tag = this.db.prepare('SELECT id FROM tags WHERE name = ?').get(name) as unknown as { id: number };
+      this.db.prepare('INSERT OR IGNORE INTO item_tags (item_id, tag_id, source) VALUES (?, ?, ?)').run(id, tag.id, source);
+    }
+    this.db.prepare('DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM item_tags)').run();
+  }
+
+  /**
+   * Apply hand edits. A value sets the field; null removes the edit so the AI version shows again.
+   * Edited tags replace the AI tags wholesale; reverting them restores the AI tags.
+   */
+  applyEdits(id: number, patch: Record<string, unknown>): ItemRow | undefined {
+    return this.transaction(() => {
+      const row = this.getItem(id);
+      if (!row) return undefined;
+      const user: Record<string, unknown> = row.user_json ? JSON.parse(row.user_json) : {};
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) delete user[key];
+        else user[key] = value;
+      }
+      this.db
+        .prepare('UPDATE items SET user_json = ?, updated_at = ? WHERE id = ?')
+        .run(Object.keys(user).length ? JSON.stringify(user) : null, now(), id);
+
+      if ('tags' in patch) {
+        if (patch.tags === null) {
+          const ai = row.ai_json ? (JSON.parse(row.ai_json) as { tags?: string[] }) : {};
+          this.replaceTags(id, [...new Set((ai.tags ?? []).map(normaliseTag).filter(Boolean))], 'ai');
+        } else {
+          this.replaceTags(id, patch.tags as string[], 'user');
+        }
+      }
+      return this.getItem(id);
     });
   }
 

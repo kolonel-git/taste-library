@@ -6,6 +6,7 @@ import type { ItemRow, Store } from './db.ts';
 import type { AnalysisProgress, ItemDetail, ItemView, StatusView, SyncSummary } from '../shared/types.ts';
 import { analysePending, type ProgressEvent } from '../analysis/analyse.ts';
 import { effectiveFields, parseJson } from '../analysis/merge.ts';
+import { validateEdit } from '../analysis/edits.ts';
 import { ANALYSIS_VERSION } from '../analysis/prompt.ts';
 import { loadConfig, saveConfig, validateSourceFolder } from './config.ts';
 import { syncLibrary } from './sync.ts';
@@ -137,6 +138,7 @@ export function createApp(opts: AppOptions) {
       height: row.height,
       durationS: row.duration_s,
       error: row.error,
+      analysedAt: row.analysed_at,
       thumbUrl: `/thumb/${row.id}?v=${row.content_hash.slice(0, 12)}`,
       mediaUrl: `/media/${row.id}?v=${row.content_hash.slice(0, 12)}`,
     };
@@ -233,7 +235,7 @@ export function createApp(opts: AppOptions) {
     let size = 0;
     for await (const c of req) {
       size += c.length;
-      if (size > 64 * 1024) throw new Error('body too large');
+      if (size > 256 * 1024) throw new BadRequest('That is too much text to save in one go.');
       chunks.push(c);
     }
     try {
@@ -272,6 +274,14 @@ export function createApp(opts: AppOptions) {
         broadcast();
         if (tools.claude.ok) void startAnalysis();
         return send(res, 202, { started: tools.claude.ok });
+      }
+      if (req.method === 'PATCH' && one) {
+        const check = validateEdit(await readJson(req), store.tagVocabulary());
+        if (!check.ok) return send(res, 400, { error: check.error });
+        const row = store.applyEdits(Number(one[1]), check.patch);
+        if (!row) return send(res, 404, { error: 'not found' });
+        broadcast();
+        return send(res, 200, detail(row));
       }
       const again = p.match(/^\/api\/items\/(\d+)\/reanalyse$/);
       if (req.method === 'POST' && again) {
