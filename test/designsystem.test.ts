@@ -242,3 +242,52 @@ test('POST /api/items/:id/reanalyse redoes one analysed item; refuses others and
     assert.equal(store.getItem(id)!.status, 'analysed'); // untouched
   }, false);
 });
+
+// --- shorter description, Markdown style prompt ---
+
+test('prompt asks for a 200 to 300 word plain-prose description and a Markdown style prompt', () => {
+  const p = buildPrompt({ kind: 'image', files: ['/x/a.png'], tags: [] });
+  assert.match(p, /Write 200 to 300 words \(never more than 300\)/);
+  assert.match(p, /plain prose, no lists/);
+  assert.match(p, /Format it as Markdown: short `##` headings/);
+});
+
+test('an over-long description is rejected, a normal one passes', () => {
+  assert.equal(validateAnalysis(goodAnalysis({ description: 'word '.repeat(600) })).ok, false);
+  assert.ok(validateAnalysis(goodAnalysis({ description: 'word '.repeat(280).trim() })).ok);
+});
+
+// --- retry all failed, and a failed re-analysis keeps the earlier result ---
+
+test('retryAllFailed puts every failed item back, and only those', () => {
+  const s = new Store(openDb(':memory:'));
+  const a = s.insertItem(item('a.png'));
+  const b = s.insertItem(item('b.png'));
+  s.insertItem(item('c.png'));
+  for (const id of [a, b]) s.db.prepare("UPDATE items SET status='failed', error='boom' WHERE id=?").run(id);
+  assert.equal(s.retryAllFailed(), 2);
+  assert.deepEqual(s.countsByStatus(), { pending: 3, analysing: 0, analysed: 0, failed: 0 });
+  assert.equal(s.getItem(a)!.error, null);
+});
+
+test('POST /api/retry-failed requeues and re-runs failed items', async () => {
+  await withApp(async (base, { store, calls }) => {
+    const row = store.getByPath('a.png')!;
+    store.db.prepare("UPDATE items SET status='failed', error='Not signed in' WHERE id=?").run(row.id);
+    const res = await fetch(`${base}/api/retry-failed`, { method: 'POST' });
+    assert.deepEqual(await res.json(), { started: true, queued: 1 });
+    await settle(store);
+    assert.equal(store.getItem(row.id)!.status, 'analysed');
+    assert.equal(calls(), 1);
+    assert.deepEqual(await (await fetch(`${base}/api/retry-failed`, { method: 'POST' })).json(), { started: false, queued: 0 });
+  });
+});
+
+test('a failed re-analysis keeps the earlier analysis in the record', async () => {
+  const { s, old } = analysedStore();
+  s.db.prepare("UPDATE items SET status='analysing' WHERE id=?").run(old);
+  s.markFailed(old, 'h-old.png', 'login expired');
+  const row = s.getItem(old)!;
+  assert.equal(row.status, 'failed');
+  assert.equal(JSON.parse(row.ai_json!).title, 'Midnight Ledger Dashboard');
+});

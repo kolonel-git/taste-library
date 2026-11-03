@@ -22,7 +22,8 @@
     "description": {
       "type": "string",
       "minLength": 80,
-      "description": "Detailed prose description of everything the image contains."
+      "description": "Plain-prose description of what the image contains, 200 to 300 words.",
+      "maxLength": 2600
     },
     "styleGuide": {
       "type": "string",

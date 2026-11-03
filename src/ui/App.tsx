@@ -85,7 +85,7 @@ export function App() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4000);
+    const t = setTimeout(() => setToast(null), 2200);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -124,6 +124,15 @@ export function App() {
 This uses your Claude plan (roughly a minute per item). Hand edits are kept.`)) return;
     try {
       await api.reanalyseOutdated();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const retryFailed = async () => {
+    try {
+      await api.retryFailed();
+      setLoadError(null);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     }
@@ -172,6 +181,11 @@ This uses your Claude plan (roughly a minute per item). Hand edits are kept.`)) 
               <button class="btn" disabled={status.syncing} onClick={rescan}>
                 Rescan
               </button>
+              {status.counts.failed > 0 && !analysing && status.tools.claude.ok && (
+                <button class="btn" onClick={retryFailed} title="Try every failed item again">
+                  Retry {status.counts.failed} failed
+                </button>
+              )}
               {status.outdated > 0 && !analysing && status.tools.claude.ok && (
                 <button class="btn" onClick={reanalyseOutdated} title="Redo older analyses with the fuller design-system prompt">
                   Update {status.outdated} older

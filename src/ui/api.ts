@@ -15,6 +15,7 @@ export const api = {
   analyse: () => request<{ started: boolean }>('/api/analyse', { method: 'POST' }),
   reanalyse: (id: number) => request<{ started: boolean }>(`/api/items/${id}/reanalyse`, { method: 'POST' }),
   reanalyseOutdated: () => request<{ started: boolean; queued: number }>('/api/reanalyse-outdated', { method: 'POST' }),
+  retryFailed: () => request<{ started: boolean; queued: number }>('/api/retry-failed', { method: 'POST' }),
   retry: (id: number) => request<{ started: boolean }>(`/api/items/${id}/retry`, { method: 'POST' }),
   setSourceFolder: (sourceFolder: string) =>
     request<StatusView>('/api/settings', {

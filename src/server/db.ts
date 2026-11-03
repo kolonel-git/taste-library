@@ -266,6 +266,12 @@ export class Store {
     return Number(res.changes) > 0;
   }
 
+  /** Every failed item back to pending (for example after signing in again). */
+  retryAllFailed(): number {
+    const res = this.db.prepare("UPDATE items SET status = 'pending', error = NULL, updated_at = ? WHERE status = 'failed'").run(now());
+    return Number(res.changes);
+  }
+
   /** Tag vocabulary, most used first. */
   tagVocabulary(limit = 300): string[] {
     const rows = this.db

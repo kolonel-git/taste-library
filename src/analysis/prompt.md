@@ -8,7 +8,7 @@ Produce these fields:
 
 **title**: a short, evocative name (2 to 60 characters). Describe the feel, not the file. Good: "Midnight Ledger Dashboard". Bad: "Screenshot 3" or "UI design".
 
-**description**: a detailed, literal description of everything the image contains: the product or scene, every visible section, notable components, text content, data shown, imagery, and how the pieces relate. A few solid paragraphs. This field is about THIS image; the style guide and prompt below are not.
+**description**: a literal description of what the image contains: the product or scene, the main sections, notable components, key text and data, imagery, and how the pieces relate. Write 200 to 300 words (never more than 300) in two short paragraphs, plain prose, no lists. This field is about THIS image; the style guide and prompt below are not.
 
 **styleGuide**: a Markdown design system distilled from the reference. Treat the image as evidence of a design language and write the rules of that language, so someone could build screens that are nowhere in the image and still look like they belong to it.
 
@@ -34,7 +34,7 @@ Use exactly these level-3 headings, in this order:
 - `### Do and don't`: 5 to 8 crisp rules that keep new work faithful to the system.
 
 **stylePrompt**: a self-contained instruction block, addressed to an AI design or coding agent, that someone can paste into a brand new project so the agent builds in this style. Rules for it:
-- Start with "Use the following design system for everything you build in this project." and then give the system compactly: principles, colour tokens with hex values, type scale, spacing scale, radii, shadows, layout rules, component behaviour for the common set, iconography, imagery, motion, voice, accessibility, and do and don't rules. Use plain text with short headings and bullet lists, no tables.
+- Start with "Use the following design system for everything you build in this project." and then give the system compactly: principles, colour tokens with hex values, type scale, spacing scale, radii, shadows, layout rules, component behaviour for the common set, iconography, imagery, motion, voice, accessibility, and do and don't rules. Format it as Markdown: short `##` headings for each area and bullet lists beneath them, no tables, no code fences.
 - It must stand alone: never mention the reference image, "the screenshot", "the video", or this library. State rules, not observations.
 - Make it directly actionable: say what to do in imperative sentences ("Use 8px as the base spacing unit", "Primary buttons are #F5A524 with dark text").
 - End with: "Where this document is silent, extrapolate from the principles above and keep the result consistent with them. If a request conflicts with this system, say so and follow the system unless told otherwise."
