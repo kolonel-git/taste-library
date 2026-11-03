@@ -281,6 +281,13 @@ export function createApp(opts: AppOptions) {
         void startAnalysis();
         return send(res, 202, { started: true });
       }
+      if (req.method === 'POST' && p === '/api/retry-failed') {
+        if (!tools.claude.ok) return send(res, 400, { error: tools.claude.message ?? 'Claude Code CLI not found.' });
+        const queued = store.retryAllFailed();
+        broadcast();
+        if (queued > 0) void startAnalysis();
+        return send(res, 202, { started: queued > 0, queued });
+      }
       if (req.method === 'POST' && p === '/api/reanalyse-outdated') {
         if (!tools.claude.ok) return send(res, 400, { error: tools.claude.message ?? 'Claude Code CLI not found.' });
         const queued = store.requeue(ANALYSIS_VERSION);

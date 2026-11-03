@@ -259,3 +259,20 @@ Click any analysed card, press **Copy everything**, and paste into another tool.
 - **Style may carry the source's subject:** because it is derived from one reference, the prompt can keep domain flavour (the weather sample's prompt talks about "rain blue" and "heat orange" as colour meanings). It is generic in structure and covers unseen components, but it is still your reference's language.
 - **Programmatic clicks:** in the preview pane, a script-made click cannot copy (no user gesture); real clicks work. Not an app issue.
 - Only 2 of your 9 items were re-analysed, and only in my scratch copy. Your real library still shows "Update 9 older" until you choose to run it.
+
+### Detail view polish (after merge of Sprint 4)
+
+**Asked for:** shorter and smaller description (about 200 to 300 words); the "Copied" flash must not change a button's size and should be shorter; style guide and style prompt as two switchable views under one heading with a Raw Markdown view; six colours per palette row.
+
+**Done**
+- **Description:** the prompt now asks for 200 to 300 words in two short paragraphs of plain prose (schema allows up to 2,600 characters so a long answer is not thrown away). Text is 13 px with preserved paragraph breaks. This applies to new analyses; existing descriptions are unchanged, and the prompt version was not bumped, so nothing shows as "older".
+- **Copy feedback:** every copy button flashes for 0.8 s (was 1.5 s) and keeps its exact size. Tags and keywords are locked to their own width while they read "Copied" (a tick if the chip is too narrow for the word); the icon buttons swap the icon for a tick in the same 30 px box; swatches already sit in a fixed grid. Measured on a real click: chip 101.6 x 25.6 px before, during and after. The toast also stays up for 2.2 s instead of 4 s.
+- **Style section:** one "Style" heading. Two switches: **Style guide / Style prompt**, and **Preview / Raw**. Preview shows the formatted text; Raw shows the Markdown in a monospace, selectable block. The copy icon at the top right copies whichever document is open (always the raw Markdown), and its label says which. The Preview / Raw choice is remembered. Style prompts are now requested as Markdown (`##` headings, bullet lists) so Preview renders them properly; older prompts are plain text and still read fine.
+- **Palette:** six colours per row at desktop width (10 colours show as 6 + 4); three per row on a phone. Swatches are slightly smaller with tighter type so six fit.
+- **Also fixed (found while checking your library copy):** a failed re-analysis used to hide the earlier good result in the sheet. The sheet now keeps showing it beneath the failure note. A new **Retry N failed** button in the header (and `POST /api/retry-failed`) retries every failed item at once, so you do not have to press Retry on each card after signing in again.
+
+**Test results:** 108 of 108 pass (6 new: description length, Markdown prompt, retry-all-failed, a failed re-analysis keeps the earlier result). Browser at 1280 px: six swatches per row, chip size unchanged while flashing, both documents switch, Raw persists across a reload, and the copy icon's payload is the style guide (9,191 characters, starts `### Design principles`) or the style prompt (4,411 characters, starts "Use the following design system…") depending on the tab.
+
+**Known issues**
+- Your real library copy showed 8 failed and 1 analysed. That is the expired Claude Code login (see below), not data loss: the earlier results are still stored and the sheet shows them again after this change. Sign in with `claude auth login`, then press **Retry 8 failed**.
+- The preview pane in the desktop app reports a zero-width window until it is resized, which tripped the phone breakpoint during testing; in a normal browser window the layout is as described.

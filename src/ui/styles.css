@@ -190,31 +190,41 @@ button, input { font: inherit; color: inherit; }
 .btn.small { padding: 5px 12px; font-size: 12px; }
 .tags.clickable li { padding: 0; border: 0; }
 .chip-btn {
-  padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted);
+  text-align: center; white-space: nowrap; overflow: hidden; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted);
   font-size: 12px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 .chip-btn:hover { color: var(--ink); border-color: var(--muted); background: var(--surface); }
 .kw .chip-btn { color: var(--ink); }
 .prompt-hint { margin: 0 0 8px; font-size: 12px; }
-.prompt {
+/* style: document and view switches */
+.style-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.seg button {
+  padding: 5px 13px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.seg button:hover { color: var(--ink); }
+.seg button.on { background: var(--ink); color: var(--bg); font-weight: 500; }
+.raw {
   margin: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
   font: 12.5px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink);
+  user-select: text;
 }
-.desc { margin: 0; color: var(--ink); line-height: 1.65; }
+.desc { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink); white-space: pre-line; }
 .note { margin: 18px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--muted); }
 .note.bad { border-color: color-mix(in srgb, var(--danger) 45%, transparent); color: var(--ink); display: grid; gap: 10px; justify-items: start; }
 .note p { margin: 0; }
-.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
 .swatch {
-  display: grid; gap: 2px; width: 100%; padding: 6px 6px 9px; text-align: left; cursor: pointer;
+  display: grid; gap: 2px; width: 100%; min-width: 0; padding: 5px 5px 8px; text-align: left; cursor: pointer;
   border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
   transition: border-color 0.15s, transform 0.15s;
 }
 .swatch:hover { border-color: var(--muted); transform: translateY(-1px); }
-.chip-color { display: block; height: 52px; border-radius: 6px; margin-bottom: 6px; box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.25); }
-.swatch .hex { padding: 0 4px; font: 500 13px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: 0.02em; }
-.swatch .role { padding: 0 4px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-.swatch .cname { padding: 0 4px; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-color { display: block; height: 40px; border-radius: 6px; margin-bottom: 5px; box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.25); }
+.swatch .hex { padding: 0 3px; font: 500 11px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.swatch .role { padding: 0 3px; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.swatch .cname { padding: 0 3px; font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kw li { color: var(--ink); }
 .guide { line-height: 1.6; }
 .guide h4 { margin: 24px 0 6px; font: 600 14px/1.3 var(--sans); }
@@ -224,6 +234,9 @@ button, input { font: inherit; color: inherit; }
 .guide li { margin: 3px 0; }
 .guide code { padding: 1px 5px; border-radius: 4px; background: var(--raised); font: 12.5px ui-monospace, "Cascadia Mono", Consolas, monospace; }
 
+@media (max-width: 560px) {
+  .swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 860px) {
   .backdrop { padding: 0; }
   .sheet { border-radius: 0; border: 0; }

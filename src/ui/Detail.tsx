@@ -24,12 +24,32 @@ interface Props {
   notify: (message: string) => void;
 }
 
+/** Copies text and reports whether it worked (the caller flashes its own button). */
+type Copier = (text: string, label: string) => Promise<boolean>;
+
 const STATUS_NOTE: Record<string, string> = {
   pending: 'Not analysed yet. Use “Analyse pending” to generate the style guide.',
   analysing: 'Being analysed now. This page fills in when it finishes.',
 };
 
 const FOCUSABLE = 'a[href], button:not([disabled]), video[controls], [tabindex]:not([tabindex="-1"])';
+const FLASH_MS = 800;
+const VIEW_KEY = 'taste-library:style-view';
+
+/** `on` is true for a short moment after `flash()`. */
+function useFlash(): [boolean, () => void] {
+  const [on, setOn] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return [
+    on,
+    () => {
+      setOn(true);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setOn(false), FLASH_MS);
+    },
+  ];
+}
 
 function CopyIcon({ done }: { done: boolean }) {
   return done ? (
@@ -44,11 +64,87 @@ function CopyIcon({ done }: { done: boolean }) {
   );
 }
 
+/** Icon button that turns into a tick for a moment. Same size either way. */
+function CopyIconButton({ label, text, copy, className = 'copy-icon' }: { label: string; text: string; copy: Copier; className?: string }) {
+  const [on, flash] = useFlash();
+  return (
+    <button
+      class={className}
+      aria-label={`Copy ${label}`}
+      title={`Copy ${label}`}
+      onClick={async () => (await copy(text, label)) && flash()}
+    >
+      <CopyIcon done={on} />
+    </button>
+  );
+}
+
+/** Tag or keyword: click to copy. Shows "Copied" briefly while keeping its original width. */
+function ChipButton({ text, copy }: { text: string; copy: Copier }) {
+  const [on, flash] = useFlash();
+  const ref = useRef<HTMLButtonElement>(null);
+  const [width, setWidth] = useState(0);
+  return (
+    <li>
+      <button
+        ref={ref}
+        class="chip-btn"
+        style={on && width ? { width: `${width}px` } : undefined}
+        title={`Copy “${text}”`}
+        onClick={async () => {
+          const w = ref.current?.getBoundingClientRect().width ?? 0;
+          if (await copy(text, `“${text}”`)) {
+            setWidth(w);
+            flash();
+          }
+        }}
+      >
+        {on ? (width && width < 62 ? '✓' : 'Copied') : text}
+      </button>
+    </li>
+  );
+}
+
+function Swatch({ hex, role, name, copy }: { hex: string; role: string; name?: string; copy: Copier }) {
+  const [on, flash] = useFlash();
+  return (
+    <li>
+      <button class="swatch" aria-label={`Copy ${hex}, ${role}`} onClick={async () => (await copy(hex, hex)) && flash()}>
+        <span class="chip-color" style={{ background: hex }} />
+        <span class="hex">{on ? 'Copied' : hex}</span>
+        <span class="role">{role}</span>
+        {name && <span class="cname" title={name}>{name}</span>}
+      </button>
+    </li>
+  );
+}
+
+function Section({ id, title, text, copyLabel, copy, children }: { id: string; title: string; text?: string; copyLabel?: string; copy: Copier; children: ComponentChildren }) {
+  return (
+    <section class="sec" aria-labelledby={`h-${id}`}>
+      <div class="sec-head">
+        <h3 id={`h-${id}`}>{title}</h3>
+        {text && <CopyIconButton label={copyLabel ?? title.toLowerCase()} text={text} copy={copy} />}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function readView(): boolean {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'raw';
+  } catch {
+    return false;
+  }
+}
+
 export function Detail({ item, ids, onClose, onGo, onRetry, onReanalyse, notify }: Props) {
   const [loaded, setLoaded] = useState<ItemDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mediaBroken, setMediaBroken] = useState(false);
-  const [justCopied, setJustCopied] = useState<string | null>(null);
+  const [doc, setDoc] = useState<'guide' | 'prompt'>('guide');
+  const [raw, setRaw] = useState(readView);
   const sheet = useRef<HTMLDivElement>(null);
   const pos = neighbours(ids, item.id);
   // Never show or copy the previous item's record while the next one is loading.
@@ -120,43 +216,30 @@ export function Detail({ item, ids, onClose, onGo, onRetry, onReanalyse, notify 
   }, [onClose, onGo, pos.prev, pos.next]);
 
   const e = detail?.effective ?? {};
-  const analysed = item.status === 'analysed' && detail !== null && Boolean(e.styleGuide);
+  // A failed re-analysis keeps the earlier result, so keep showing it under the failure note.
+  const analysed = (item.status === 'analysed' || item.status === 'failed') && detail !== null && Boolean(e.styleGuide);
   const guideHtml = useMemo(() => (e.styleGuide ? renderMarkdown(e.styleGuide) : ''), [e.styleGuide]);
+  const promptHtml = useMemo(() => (e.stylePrompt ? renderMarkdown(e.stylePrompt) : ''), [e.stylePrompt]);
 
-  const copy = async (key: string, text: string, label: string) => {
+  const copy: Copier = async (text, label) => {
     const ok = await copyText(text);
     notify(ok ? `Copied ${label}` : 'Could not copy. Select the text and copy it by hand.');
-    if (ok) {
-      setJustCopied(key);
-      setTimeout(() => setJustCopied((k) => (k === key ? null : k)), 1500);
+    return ok;
+  };
+
+  const setView = (isRaw: boolean) => {
+    setRaw(isRaw);
+    try {
+      localStorage.setItem(VIEW_KEY, isRaw ? 'raw' : 'preview');
+    } catch {
+      /* remembering the choice is a convenience only */
     }
   };
 
-  /** Section heading with a copy icon at its right-hand end. */
-  const section = (id: string, title: string, text: string | undefined, children: ComponentChildren) => (
-    <section class="sec" aria-labelledby={`h-${id}`} key={id}>
-      <div class="sec-head">
-        <h3 id={`h-${id}`}>{title}</h3>
-        {text && (
-          <button class="copy-icon" aria-label={`Copy ${title.toLowerCase()}`} title={`Copy ${title.toLowerCase()}`} onClick={() => copy(id, text, title.toLowerCase())}>
-            <CopyIcon done={justCopied === id} />
-          </button>
-        )}
-      </div>
-      {children}
-    </section>
-  );
-
-  /** Tag or keyword: click to copy its text. */
-  const chip = (text: string, kind: string) => (
-    <li key={text}>
-      <button class="chip-btn" title={`Copy “${text}”`} onClick={() => copy(`${kind}-${text}`, text, `“${text}”`)}>
-        {justCopied === `${kind}-${text}` ? 'Copied' : text}
-      </button>
-    </li>
-  );
-
   const name = detail?.effective.title ?? item.title ?? item.relPath.split('/').pop() ?? 'Untitled';
+  const showingGuide = doc === 'guide';
+  const docText = detail ? (showingGuide ? styleGuideText(detail) : stylePromptText(detail)) : '';
+  const docLabel = showingGuide ? 'style guide' : 'style prompt';
 
   return (
     <div class="backdrop" onMouseDown={(ev) => ev.target === ev.currentTarget && onClose()}>
@@ -166,14 +249,7 @@ export function Detail({ item, ids, onClose, onGo, onRetry, onReanalyse, notify 
           <div class="sheet-nav">
             {analysed && detail && (
               <>
-                <button
-                  class="icon"
-                  aria-label="Copy everything"
-                  title="Copy everything (all sections as Markdown)"
-                  onClick={() => copy('all', everythingText(detail), 'everything')}
-                >
-                  <CopyIcon done={justCopied === 'all'} />
-                </button>
+                <CopyIconButton label="everything" text={everythingText(detail)} copy={copy} className="icon" />
                 <button class="btn small" onClick={() => onReanalyse(item.id)} title="Run the analysis again. Your edits are kept.">
                   Re-analyse
                 </button>
@@ -207,7 +283,9 @@ export function Detail({ item, ids, onClose, onGo, onRetry, onReanalyse, notify 
             <p class="file muted">{item.relPath}</p>
             {item.tags.length > 0 && (
               <ul class="tags clickable" aria-label="Tags">
-                {item.tags.map((t) => chip(t, 'tag'))}
+                {item.tags.map((t) => (
+                  <ChipButton key={t} text={t} copy={copy} />
+                ))}
               </ul>
             )}
 
@@ -225,7 +303,7 @@ export function Detail({ item, ids, onClose, onGo, onRetry, onReanalyse, notify 
               </div>
             )}
 
-            {analysed && detail?.outdated && (
+            {item.status === 'analysed' && detail?.outdated && (
               <p class="note">
                 This was analysed with an earlier version of the prompt. Re-analyse for the fuller design system and a style prompt.
               </p>
@@ -233,56 +311,64 @@ export function Detail({ item, ids, onClose, onGo, onRetry, onReanalyse, notify 
 
             {analysed && detail && (
               <>
-                {e.description && section('description', 'Description', descriptionText(detail), <p class="desc">{e.description}</p>)}
+                {e.description && (
+                  <Section id="description" title="Description" text={descriptionText(detail)} copy={copy}>
+                    <p class="desc">{e.description}</p>
+                  </Section>
+                )}
 
-                {e.palette &&
-                  e.palette.length > 0 &&
-                  section(
-                    'palette',
-                    'Palette',
-                    paletteText(detail),
+                {e.palette && e.palette.length > 0 && (
+                  <Section id="palette" title="Palette" text={paletteText(detail)} copy={copy}>
                     <ul class="swatches">
-                      {e.palette.map((c) => {
-                        const hex = c.hex.toUpperCase();
-                        const key = `hex-${hex}-${c.role}`;
-                        return (
-                          <li key={key}>
-                            <button class="swatch" aria-label={`Copy ${hex}, ${c.role}`} onClick={() => copy(key, hex, hex)}>
-                              <span class="chip-color" style={{ background: hex }} />
-                              <span class="hex">{justCopied === key ? 'Copied' : hex}</span>
-                              <span class="role">{c.role}</span>
-                              {c.name && <span class="cname">{c.name}</span>}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>,
-                  )}
+                      {e.palette.map((c) => (
+                        <Swatch key={`${c.hex}-${c.role}`} hex={c.hex.toUpperCase()} role={c.role} name={c.name} copy={copy} />
+                      ))}
+                    </ul>
+                  </Section>
+                )}
 
-                {e.keywords &&
-                  e.keywords.length > 0 &&
-                  section(
-                    'keywords',
-                    'Keywords',
-                    keywordsText(detail),
+                {e.keywords && e.keywords.length > 0 && (
+                  <Section id="keywords" title="Keywords" text={keywordsText(detail)} copy={copy}>
                     <ul class="tags clickable kw" aria-label="Keywords">
-                      {e.keywords.map((k) => chip(k, 'kw'))}
-                    </ul>,
+                      {e.keywords.map((k) => (
+                        <ChipButton key={k} text={k} copy={copy} />
+                      ))}
+                    </ul>
+                  </Section>
+                )}
+
+                <Section id="style" title="Style" text={docText || undefined} copyLabel={docLabel} copy={copy}>
+                  <div class="style-bar">
+                    <div class="seg" role="group" aria-label="Which document">
+                      <button class={showingGuide ? 'on' : ''} aria-pressed={showingGuide} onClick={() => setDoc('guide')}>
+                        Style guide
+                      </button>
+                      <button class={!showingGuide ? 'on' : ''} aria-pressed={!showingGuide} onClick={() => setDoc('prompt')}>
+                        Style prompt
+                      </button>
+                    </div>
+                    <div class="seg" role="group" aria-label="How to show it">
+                      <button class={!raw ? 'on' : ''} aria-pressed={!raw} onClick={() => setView(false)}>
+                        Preview
+                      </button>
+                      <button class={raw ? 'on' : ''} aria-pressed={raw} onClick={() => setView(true)}>
+                        Raw
+                      </button>
+                    </div>
+                  </div>
+
+                  {!showingGuide && <p class="muted prompt-hint">Paste this into a new project to have Claude or any other agent build in this style.</p>}
+
+                  {!docText ? (
+                    <p class="note">No style prompt yet. Re-analyse this item to generate one.</p>
+                  ) : raw ? (
+                    <pre class="raw" tabindex={0} aria-label={`${docLabel}, raw Markdown`}>
+                      {docText}
+                    </pre>
+                  ) : (
+                    <div class="guide" dangerouslySetInnerHTML={{ __html: showingGuide ? guideHtml : promptHtml }} />
                   )}
-
-                {guideHtml && section('guide', 'Style guide', styleGuideText(detail), <div class="guide" dangerouslySetInnerHTML={{ __html: guideHtml }} />)}
-
-                {e.stylePrompt
-                  ? section(
-                      'prompt',
-                      'Style prompt',
-                      stylePromptText(detail),
-                      <>
-                        <p class="muted prompt-hint">Paste this into a new project to have Claude or any other agent build in this style.</p>
-                        <pre class="prompt">{e.stylePrompt}</pre>
-                      </>,
-                    )
-                  : section('prompt', 'Style prompt', undefined, <p class="note">No style prompt yet. Re-analyse this item to generate one.</p>)}
+                </Section>
               </>
             )}
           </section>
