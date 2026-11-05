@@ -353,3 +353,11 @@ Click tags in the bar to filter. Open any card, press a pencil, change something
 **Test results:** 126 of 126 pass, typecheck and build clean. Real check on a copy of your library: re-analysed the weather item with the real CLI (55 s). Result: description 194 words in one paragraph, guide opens with the instruction line and ends with the extrapolation line, 13 sections, 11 k characters, no style prompt field, no mention of the image. In the browser the sheet shows Description, Palette, Keywords and Style guide (Preview or Raw), the filter chips measure a single 1 px outline with the list item at 0, and the old items show the "analysed with an earlier version" note.
 
 **Known issues:** none new. The previous review's note about the 7 failed retries no longer applies; they are all analysed in your library.
+
+## v1 sign-off
+
+**Closed:** Taste Library v1 accepted by the product owner after Sprint 5 (merged as PR #6).
+
+- All 14 user stories built, tested (126 of 126) and checked end to end against a real library, including video.
+- Roadmap deliverables for Sprints 1 to 5 are done. No open defects.
+- Left for later (not in v1): live folder watching, free-text search, subfolder names as tags, global slash-command install, bulk edits and tag rename or merge, library export or import. A v2 backlog will be pitched before any work starts.
